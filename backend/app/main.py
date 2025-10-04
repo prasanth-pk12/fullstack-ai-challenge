@@ -1,16 +1,18 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from database.connection import create_tables
-from routers import auth_router, task_router, external_router
+from routers import auth_router, task_router, external_router, websocket_router
 from services.auth_service import get_current_user, role_required
+from services.websocket_service import start_heartbeat_task
 from models.auth_models import UserRole, User
 from schemas.auth_schemas import User as UserSchema
 import os
+import asyncio
 
 # Create FastAPI app
 app = FastAPI(
-    title="FastAPI Authentication, Task & External API",
-    description="A FastAPI application with JWT authentication, task management, file uploads, and external data fetching",
+    title="FastAPI Authentication, Task & External API with WebSockets",
+    description="A FastAPI application with JWT authentication, task management, file uploads, external data fetching, and real-time WebSocket updates",
     version="1.0.0"
 )
 
@@ -25,11 +27,14 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 @app.on_event("startup")
 async def startup():
     create_tables()
+    # Start WebSocket heartbeat task
+    start_heartbeat_task()
 
 # Include routers
 app.include_router(auth_router.router)
 app.include_router(task_router.router)
 app.include_router(external_router.router)
+app.include_router(websocket_router.router)
 
 # Protected route examples
 @app.get("/", tags=["root"])
