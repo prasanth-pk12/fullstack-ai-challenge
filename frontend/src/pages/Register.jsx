@@ -94,8 +94,16 @@ const Register = () => {
       );
       
       if (result.success) {
-        toast.success('Account created successfully! Welcome!');
-        navigate('/dashboard', { replace: true });
+        if (result.autoLogin) {
+          toast.success('Account created and logged in successfully! Welcome!');
+          // Add a small delay for better UX during redirect
+          setTimeout(() => {
+            navigate('/tasks', { replace: true });
+          }, 500);
+        } else {
+          toast.success('Account created successfully! Please log in.');
+          navigate('/login', { replace: true });
+        }
       } else {
         toast.error(result.error);
       }

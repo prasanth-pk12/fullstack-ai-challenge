@@ -72,13 +72,25 @@ def create_task(db: Session, task_data: TaskCreate, current_user: User) -> Task:
                 "due_date": refreshed_task.due_date.isoformat() if refreshed_task.due_date is not None else None,
                 "attachments": refreshed_task.attachments,
                 "owner_id": refreshed_task.owner_id,
-                "owner_username": refreshed_task.owner.username if refreshed_task.owner else None,
+                "owner": {
+                    "id": refreshed_task.owner.id,
+                    "username": refreshed_task.owner.username,
+                    "email": refreshed_task.owner.email,
+                    "role": refreshed_task.owner.role.value
+                } if refreshed_task.owner else None,
                 "created_at": refreshed_task.created_at.isoformat() if refreshed_task.created_at is not None else None,
                 "updated_at": refreshed_task.updated_at.isoformat() if refreshed_task.updated_at is not None else None
             }
             
+            user_info = {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": current_user.email,
+                "role": current_user.role.value
+            }
+            
             # Schedule WebSocket event emission
-            asyncio.create_task(_emit_task_created_event(task_dict, int(current_user.id)))
+            asyncio.create_task(_emit_task_created_event(task_dict, int(current_user.id), user_info))
             
         except Exception as e:
             logger.error(f"Failed to emit task created event: {str(e)}")
@@ -88,11 +100,11 @@ def create_task(db: Session, task_data: TaskCreate, current_user: User) -> Task:
     return db_task
 
 
-async def _emit_task_created_event(task_data: dict, created_by_user_id: int):
+async def _emit_task_created_event(task_data: dict, created_by_user_id: int, user_info: dict):
     """Helper function to emit task created event"""
     try:
         from services.websocket_service import task_event_broadcaster
-        await task_event_broadcaster.broadcast_task_created(task_data, created_by_user_id)
+        await task_event_broadcaster.broadcast_task_created(task_data, created_by_user_id, user_info)
     except Exception as e:
         logger.error(f"Error broadcasting task created event: {str(e)}")
 

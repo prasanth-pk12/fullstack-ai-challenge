@@ -52,8 +52,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      removeToken();
-      window.location.href = '/login';
+      // Only redirect to login if we're not already on auth pages
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/login' && currentPath !== '/register') {
+        removeToken();
+        window.location.href = '/login';
+      }
+      // If we're on login/register pages, don't redirect (let the component handle the error)
     }
     return Promise.reject(error);
   }
@@ -76,11 +81,6 @@ export const authAPI = {
       password,
       role,
     });
-    return response.data;
-  },
-
-  getProfile: async () => {
-    const response = await api.get('/auth/profile');
     return response.data;
   },
 
@@ -117,8 +117,31 @@ export const tasksAPI = {
     return response.data;
   },
 
-  getTaskCount: async () => {
-    const response = await api.get('/tasks/count');
+  getTaskStats: async () => {
+    const response = await api.get('/tasks/stats/count');
+    return response.data;
+  },
+
+  // File attachment endpoints
+  uploadFile: async (taskId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post(`/tasks/${taskId}/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  getTaskAttachments: async (taskId) => {
+    const response = await api.get(`/tasks/${taskId}/attachments`);
+    return response.data;
+  },
+
+  deleteAttachment: async (attachmentId) => {
+    const response = await api.delete(`/tasks/attachments/${attachmentId}`);
     return response.data;
   },
 };

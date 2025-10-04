@@ -16,7 +16,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = location.state?.from?.pathname || '/tasks';
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -25,12 +25,12 @@ const Login = () => {
     }
   }, [isAuthenticated, isLoading, navigate, from]);
 
-  // Clear errors when component mounts or form data changes
+  // Clear errors when component mounts
   useEffect(() => {
     if (error) {
       clearError();
     }
-  }, [formData, clearError, error]);
+  }, [clearError, error]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -42,6 +42,12 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Clear any previous errors
+    if (error) {
+      clearError();
+    }
     
     if (!formData.username.trim() || !formData.password) {
       toast.error('Please fill in all fields');
@@ -51,16 +57,26 @@ const Login = () => {
     setIsSubmitting(true);
     
     try {
+      console.log('Attempting login with:', { username: formData.username }); // Debug log
       const result = await login(formData.username, formData.password);
+      console.log('Login result:', result); // Debug log
       
-      if (result.success) {
+      if (result && result.success) {
         toast.success('Welcome back!');
-        navigate(from, { replace: true });
+        // Show loading state during redirect
+        setTimeout(() => {
+          navigate(from, { replace: true });
+        }, 500); // Small delay for better UX
       } else {
-        toast.error(result.error);
+        console.log('Login failed with error:', result?.error); // Debug log
+        const errorMsg = result?.error || 'Login failed. Please check your credentials.';
+        toast.error(errorMsg);
+        // Keep form data intact - don't clear it
       }
     } catch (err) {
+      console.error('Login exception:', err); // Debug log
       toast.error('An unexpected error occurred');
+      // Keep form data intact - don't clear it
     } finally {
       setIsSubmitting(false);
     }

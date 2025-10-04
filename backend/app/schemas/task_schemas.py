@@ -4,6 +4,17 @@ from datetime import datetime
 from models.task_models import TaskStatus
 
 
+class UserInfo(BaseModel):
+    """User information schema for task ownership"""
+    id: int
+    username: str
+    email: str
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
 class TaskBase(BaseModel):
     """Base task schema"""
     title: str = Field(..., min_length=1, max_length=200)
@@ -40,7 +51,7 @@ class Task(TaskBase):
 
 class TaskWithOwner(Task):
     """Schema for task response with owner details"""
-    owner: dict = Field(..., description="Owner user information")
+    owner: UserInfo = Field(..., description="Owner user information")
 
     class Config:
         from_attributes = True

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import Navigation from '../components/Navigation';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -10,6 +11,9 @@ const Dashboard = () => {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+      {/* Navigation */}
+      <Navigation />
+      
       {/* Header */}
       <header style={{
         backgroundColor: 'white',

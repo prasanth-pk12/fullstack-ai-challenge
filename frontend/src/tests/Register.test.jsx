@@ -352,4 +352,247 @@ describe('Register Page', () => {
       });
     });
   });
+
+  describe('Registration Success and Redirect Flow', () => {
+    const validFormData = {
+      username: 'testuser',
+      email: 'test@example.com',
+      password: 'password123',
+      role: 'user'
+    };
+
+    const fillValidForm = async (user) => {
+      const usernameInput = screen.getByTestId('username-input');
+      const emailInput = screen.getByTestId('email-input');
+      const roleSelect = screen.getByTestId('role-select');
+      const passwordInput = screen.getByTestId('password-input');
+      const confirmPasswordInput = screen.getByTestId('confirm-password-input');
+
+      await user.type(usernameInput, validFormData.username);
+      await user.type(emailInput, validFormData.email);
+      await user.selectOptions(roleSelect, validFormData.role);
+      await user.type(passwordInput, validFormData.password);
+      await user.type(confirmPasswordInput, validFormData.password);
+    };
+
+    test('should redirect to /tasks after successful registration with auto-login', async () => {
+      const user = userEvent.setup();
+      
+      // Mock the register function from AuthContext
+      const mockRegister = jest.fn().mockResolvedValue({
+        success: true,
+        autoLogin: true
+      });
+
+      // Mock the useAuth hook
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegister
+        })
+      }));
+
+      renderRegister();
+
+      await fillValidForm(user);
+      
+      const submitButton = screen.getByTestId('submit-button');
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalledWith(
+          validFormData.username,
+          validFormData.email,
+          validFormData.password,
+          validFormData.role
+        );
+      });
+
+      // Should redirect to /tasks with delay
+      await waitFor(
+        () => {
+          expect(mockNavigate).toHaveBeenCalledWith('/tasks', { replace: true });
+        },
+        { timeout: 1000 }
+      );
+    });
+
+    test('should redirect to /login after successful registration without auto-login', async () => {
+      const user = userEvent.setup();
+      
+      // Mock the register function returning success but no auto-login
+      const mockRegister = jest.fn().mockResolvedValue({
+        success: true,
+        autoLogin: false
+      });
+
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegister
+        })
+      }));
+
+      renderRegister();
+
+      await fillValidForm(user);
+      
+      const submitButton = screen.getByTestId('submit-button');
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
+      });
+    });
+
+    test('should show loading state during registration', async () => {
+      const user = userEvent.setup();
+      
+      // Mock register with delay
+      const mockRegister = jest.fn().mockImplementation(() =>
+        new Promise(resolve =>
+          setTimeout(() => resolve({ success: true, autoLogin: true }), 200)
+        )
+      );
+
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegister
+        })
+      }));
+
+      renderRegister();
+
+      await fillValidForm(user);
+      
+      const submitButton = screen.getByTestId('submit-button');
+      await user.click(submitButton);
+
+      // Check loading state
+      expect(submitButton).toBeDisabled();
+      expect(screen.getByText('Creating account...')).toBeInTheDocument();
+
+      // Wait for completion
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/tasks', { replace: true });
+      });
+    });
+
+    test('should handle registration errors gracefully', async () => {
+      const user = userEvent.setup();
+      
+      const mockRegister = jest.fn().mockResolvedValue({
+        success: false,
+        error: 'Email already exists'
+      });
+
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegister
+        })
+      }));
+
+      renderRegister();
+
+      await fillValidForm(user);
+      
+      const submitButton = screen.getByTestId('submit-button');
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalled();
+      });
+
+      // Should not navigate on error
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      // Should clear loading state
+      await waitFor(() => {
+        expect(submitButton).not.toBeDisabled();
+      });
+      
+      expect(screen.queryByText('Creating account...')).not.toBeInTheDocument();
+    });
+
+    test('should handle unexpected errors during registration', async () => {
+      const user = userEvent.setup();
+      
+      const mockRegister = jest.fn().mockRejectedValue(new Error('Network error'));
+
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegister
+        })
+      }));
+
+      renderRegister();
+
+      await fillValidForm(user);
+      
+      const submitButton = screen.getByTestId('submit-button');
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalled();
+      });
+
+      // Should not navigate on error
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      // Should clear loading state
+      await waitFor(() => {
+        expect(submitButton).not.toBeDisabled();
+      });
+    });
+
+    test('should show appropriate success messages based on auto-login status', async () => {
+      const user = userEvent.setup();
+      
+      // Test with auto-login success
+      const mockRegisterWithAutoLogin = jest.fn().mockResolvedValue({
+        success: true,
+        autoLogin: true
+      });
+
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegisterWithAutoLogin
+        })
+      }));
+
+      renderRegister();
+      await fillValidForm(user);
+      
+      const submitButton = screen.getByTestId('submit-button');
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockRegisterWithAutoLogin).toHaveBeenCalled();
+      });
+
+      // Clean up and test without auto-login
+      jest.clearAllMocks();
+      
+      const mockRegisterWithoutAutoLogin = jest.fn().mockResolvedValue({
+        success: true,
+        autoLogin: false
+      });
+
+      jest.doMock('../contexts/AuthContext', () => ({
+        useAuth: () => ({
+          register: mockRegisterWithoutAutoLogin
+        })
+      }));
+
+      renderRegister();
+      await fillValidForm(user);
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockRegisterWithoutAutoLogin).toHaveBeenCalled();
+      });
+    });
+  });
 });

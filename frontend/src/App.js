@@ -6,6 +6,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Tasks from './pages/Tasks';
+import WebSocketTest from './components/WebSocketTest';
 import './App.css';
 
 function App() {
@@ -27,12 +29,28 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/tasks" 
+              element={
+                <ProtectedRoute>
+                  <Tasks />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/test-websocket" 
+              element={
+                <ProtectedRoute>
+                  <WebSocketTest />
+                </ProtectedRoute>
+              } 
+            />
             
             {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/tasks" replace />} />
             
-            {/* Catch all - redirect to dashboard */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            {/* Catch all - redirect to tasks */}
+            <Route path="*" element={<Navigate to="/tasks" replace />} />
           </Routes>
           
           {/* Toast notifications */}

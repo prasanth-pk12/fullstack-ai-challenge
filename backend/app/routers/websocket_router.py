@@ -58,21 +58,30 @@ async def websocket_basic_endpoint(websocket: WebSocket):
 
 
 async def authenticate_websocket_user(token: str, db: Session) -> tuple[int, str]:
-    """Authenticate WebSocket connection using JWT token"""
+    """Authenticate WebSocket connection using JWT token - Admin users only"""
     try:
         # Decode JWT token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
+        username = payload.get("sub")
+        user_id: int = payload.get("user_id")
+        role = payload.get("role")
         
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        if username is None or user_id is None or role is None:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
         
-        # Get user from database
-        user = get_user_by_id(db, user_id)
+        # Only allow admin users to connect to WebSocket
+        # Regular users don't need real-time updates from other users
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="WebSocket access restricted to admin users only")
+        
+        # Get user from database to verify they still exist
+        from models.auth_models import User
+        user: User = get_user_by_id(db, user_id)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         
-        return user.id, user.role
+        # Return the user_id and role from the token (already validated)
+        return user_id, role
         
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -87,11 +96,14 @@ async def websocket_tasks_endpoint(
     db: Session = Depends(get_db)
 ):
     """
-    WebSocket endpoint for real-time task updates.
+    WebSocket endpoint for real-time task updates - Admin users only.
     
-    **Authentication:** Required via query parameter
+    **Authentication:** Required via query parameter (Admin role required)
     
     **Connection URL:** `/ws/tasks?token=<jwt_token>`
+    
+    **Access Control:** Only admin users can connect to receive real-time updates.
+    Regular users don't need to see updates from other users' tasks.
     
     **Features:**
     - Real-time task creation notifications
@@ -154,12 +166,13 @@ async def websocket_tasks_endpoint(
     connection_id = None
     
     try:
-        # Authenticate user
+        # Authenticate user BEFORE accepting connection
         if not token:
             await handle_websocket_error(
                 websocket, 
                 "Authentication token required. Use ?token=<jwt_token> query parameter",
-                error_code=1008
+                error_code=1008,
+                accept_first=True
             )
             return
         
@@ -169,54 +182,61 @@ async def websocket_tasks_endpoint(
             await handle_websocket_error(
                 websocket, 
                 f"Authentication failed: {e.detail}",
-                error_code=1008
+                error_code=1008,
+                accept_first=True
             )
             return
         
         # Establish connection
         connection_id = await connection_manager.connect(websocket, user_id, user_role)
         
-        logger.info(f"WebSocket connection established for user {user_id} ({user_role})")
+        logger.info(f"WebSocket connection established for user {user_id} ({user_role}) with connection_id: {connection_id}")
         
         # Listen for messages
         while True:
             try:
-                # Receive message from client
+                # Receive message from client with timeout to prevent hanging
                 data = await websocket.receive_text()
+                logger.debug(f"Received WebSocket message from {connection_id}: {data}")
+                
                 message = json.loads(data)
                 
                 # Handle different message types
                 await handle_client_message(websocket, connection_id, message, user_id, user_role)
                 
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from {connection_id}: {e}")
                 # Send error for invalid JSON
                 error_msg = create_error_message("Invalid JSON format", code=1003)
                 await websocket.send_text(error_msg.json())
                 
             except WebSocketDisconnect:
-                logger.info(f"WebSocket client disconnected: {connection_id}")
+                logger.info(f"WebSocket client {connection_id} disconnected normally")
                 break
                 
             except Exception as e:
-                logger.error(f"Error handling WebSocket message: {str(e)}")
-                error_msg = create_error_message(f"Message handling error: {str(e)}", code=1011)
-                await websocket.send_text(error_msg.json())
+                logger.error(f"Error handling WebSocket message from {connection_id}: {str(e)}")
+                # Don't send error message for connection issues, just log and break
+                break
     
     except WebSocketDisconnect:
-        logger.info(f"WebSocket client disconnected during setup: {connection_id}")
+        logger.info(f"WebSocket client disconnected during setup - connection_id: {connection_id}")
     
     except Exception as e:
         logger.error(f"WebSocket connection error: {str(e)}")
-        if connection_id:
-            await handle_websocket_error(
-                websocket,
-                f"Connection error: {str(e)}",
-                error_code=1011
-            )
+        # Don't try to send error messages if connection failed
+        # if connection_id:
+        #     await handle_websocket_error(
+        #         websocket,
+        #         f"Connection error: {str(e)}",
+        #         error_code=1011,
+        #         accept_first=False
+        #     )
     
     finally:
         # Clean up connection
         if connection_id:
+            logger.info(f"Cleaning up WebSocket connection: {connection_id}")
             connection_manager.disconnect(connection_id)
 
 

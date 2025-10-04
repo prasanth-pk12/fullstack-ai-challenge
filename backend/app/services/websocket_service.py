@@ -20,28 +20,35 @@ class ConnectionManager:
         
     async def connect(self, websocket: WebSocket, user_id: int, user_role: str) -> str:
         """Accept a new WebSocket connection and return connection ID"""
-        await websocket.accept()
-        
-        connection_id = str(uuid.uuid4())
-        self.active_connections[connection_id] = {
-            "websocket": websocket,
-            "user_id": user_id,
-            "user_role": user_role,
-            "connected_at": datetime.utcnow()
-        }
-        self.connected_users.add(user_id)
-        
-        logger.info(f"WebSocket connection established: {connection_id} for user {user_id}")
-        
-        # Send welcome message
-        await self.send_personal_message(connection_id, {
-            "type": "connection",
-            "message": "Connected to task updates",
-            "connection_id": connection_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        })
-        
-        return connection_id
+        try:
+            await websocket.accept()
+            logger.info(f"WebSocket accepted for user {user_id}")
+            
+            connection_id = str(uuid.uuid4())
+            self.active_connections[connection_id] = {
+                "websocket": websocket,
+                "user_id": user_id,
+                "user_role": user_role,
+                "connected_at": datetime.utcnow()
+            }
+            self.connected_users.add(user_id)
+            
+            logger.info(f"WebSocket connection stored: {connection_id} for user {user_id}")
+            
+            # Send welcome message
+            await self.send_personal_message(connection_id, {
+                "type": "connection",
+                "message": "Connected to task updates",
+                "connection_id": connection_id,
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            })
+            
+            logger.info(f"Welcome message sent to {connection_id}")
+            return connection_id
+            
+        except Exception as e:
+            logger.error(f"Error in WebSocket connect: {str(e)}")
+            raise
     
     def disconnect(self, connection_id: str):
         """Remove a WebSocket connection"""
@@ -155,30 +162,33 @@ class TaskEventBroadcaster:
     def __init__(self, manager: ConnectionManager):
         self.manager = manager
     
-    async def broadcast_task_created(self, task_data: dict, created_by_user_id: int):
+    async def broadcast_task_created(self, task_data: dict, created_by_user_id: int, user_info: Optional[dict] = None):
         """Broadcast task creation event"""
         message = {
             "type": "task_created",
             "task": task_data,
-            "created_by": created_by_user_id,
+            "user": user_info or {"id": created_by_user_id, "username": f"User {created_by_user_id}"},
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "event_id": str(uuid.uuid4())
         }
         
-        # Send to task owner
+        # Send to task owner (creator)
         await self.manager.send_to_user(created_by_user_id, message)
         
-        # Send to all admins
+        # Send to all admins (they can see all tasks)
         await self.manager.broadcast_to_admins(message)
         
-        logger.info(f"Broadcast task created event: task_id={task_data.get('id')} by user_id={created_by_user_id}")
+        # Note: Regular users don't get notifications about other users' tasks
+        # as they can't see them due to RBAC (Role-Based Access Control)
+        
+        logger.info(f"Broadcast task created event: task_id={task_data.get('id')} by user_id={created_by_user_id} (sent to creator + all admins)")
     
-    async def broadcast_task_updated(self, task_data: dict, updated_by_user_id: int, task_owner_id: int):
+    async def broadcast_task_updated(self, task_data: dict, updated_by_user_id: int, task_owner_id: int, user_info: Optional[dict] = None):
         """Broadcast task update event"""
         message = {
             "type": "task_updated",
             "task": task_data,
-            "updated_by": updated_by_user_id,
+            "user": user_info or {"id": updated_by_user_id, "username": f"User {updated_by_user_id}"},
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "event_id": str(uuid.uuid4())
         }
@@ -190,17 +200,17 @@ class TaskEventBroadcaster:
         # Send to updater
         await self.manager.send_to_user(updated_by_user_id, message)
         
-        # Send to all admins
+        # Send to all admins (they can see all tasks)
         await self.manager.broadcast_to_admins(message)
         
-        logger.info(f"Broadcast task updated event: task_id={task_data.get('id')} by user_id={updated_by_user_id}")
+        logger.info(f"Broadcast task updated event: task_id={task_data.get('id')} by user_id={updated_by_user_id} (sent to owner, updater + all admins)")
     
-    async def broadcast_task_deleted(self, task_id: int, deleted_by_user_id: int, task_owner_id: int):
+    async def broadcast_task_deleted(self, task_id: int, deleted_by_user_id: int, task_owner_id: int, user_info: Optional[dict] = None):
         """Broadcast task deletion event"""
         message = {
             "type": "task_deleted",
             "task_id": task_id,
-            "deleted_by": deleted_by_user_id,
+            "user": user_info or {"id": deleted_by_user_id, "username": f"User {deleted_by_user_id}"},
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "event_id": str(uuid.uuid4())
         }
@@ -212,10 +222,10 @@ class TaskEventBroadcaster:
         # Send to deleter
         await self.manager.send_to_user(deleted_by_user_id, message)
         
-        # Send to all admins
+        # Send to all admins (they can see all tasks)
         await self.manager.broadcast_to_admins(message)
         
-        logger.info(f"Broadcast task deleted event: task_id={task_id} by user_id={deleted_by_user_id}")
+        logger.info(f"Broadcast task deleted event: task_id={task_id} by user_id={deleted_by_user_id} (sent to owner, deleter + all admins)")
     
     async def broadcast_task_status_changed(self, task_data: dict, old_status: str, new_status: str, updated_by_user_id: int):
         """Broadcast task status change event"""
@@ -244,9 +254,13 @@ class TaskEventBroadcaster:
 task_event_broadcaster = TaskEventBroadcaster(connection_manager)
 
 
-async def handle_websocket_error(websocket: WebSocket, error_message: str, error_code: int = 1000):
+async def handle_websocket_error(websocket: WebSocket, error_message: str, error_code: int = 1000, accept_first: bool = True):
     """Handle WebSocket errors gracefully"""
     try:
+        # Accept the connection first if not already accepted
+        if accept_first:
+            await websocket.accept()
+        
         error_response = {
             "type": "error",
             "message": error_message,

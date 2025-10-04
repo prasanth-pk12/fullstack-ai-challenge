@@ -25,7 +25,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 @router.get(
     "/", 
-    response_model=List[Task],
+    response_model=List[TaskWithOwner],
     summary="List all tasks",
     description="Get a paginated list of tasks based on user permissions",
     responses={
@@ -42,6 +42,11 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
                             "due_date": "2024-12-31T23:59:59Z",
                             "attachments": ["doc1.pdf", "spec.md"],
                             "owner_id": 1,
+                            "owner": {
+                                "id": 1,
+                                "username": "john_doe",
+                                "email": "john@example.com"
+                            },
                             "created_at": "2024-01-15T10:30:00Z",
                             "updated_at": "2024-01-15T10:30:00Z"
                         }
@@ -91,7 +96,7 @@ async def list_tasks(
 
 @router.post(
     "/", 
-    response_model=Task, 
+    response_model=TaskWithOwner, 
     status_code=status.HTTP_201_CREATED,
     summary="Create a new task",
     description="Create a new task with title, description, and optional metadata",
@@ -169,7 +174,7 @@ async def create_new_task(
 
 @router.get(
     "/{task_id}", 
-    response_model=Task,
+    response_model=TaskWithOwner,
     summary="Get task by ID",
     description="Retrieve a specific task by its ID",
     responses={
@@ -185,6 +190,11 @@ async def create_new_task(
                         "due_date": "2024-12-31T23:59:59Z",
                         "attachments": ["requirements.pdf"],
                         "owner_id": 1,
+                        "owner": {
+                            "id": 1,
+                            "username": "john_doe",
+                            "email": "john@example.com"
+                        },
                         "created_at": "2024-01-15T10:30:00Z",
                         "updated_at": "2024-01-20T14:45:00Z"
                     }
@@ -245,7 +255,7 @@ async def get_task(
     return task
 
 
-@router.put("/{task_id}", response_model=Task)
+@router.put("/{task_id}", response_model=TaskWithOwner)
 async def update_existing_task(
     task_id: int,
     task_data: TaskUpdate,
