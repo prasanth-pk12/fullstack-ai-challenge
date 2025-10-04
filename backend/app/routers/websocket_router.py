@@ -30,7 +30,23 @@ security = HTTPBearer()
 async def websocket_basic_endpoint(websocket: WebSocket):
     """
     Basic WebSocket endpoint for testing connectivity.
-    No authentication required.
+    
+    **Authentication:** None required (public endpoint)
+    
+    **Usage:** 
+    - Connect to `/ws` 
+    - Send any text message
+    - Receive echo response with "Echo: " prefix
+    
+    **Message Format:** Plain text
+    
+    **Example:**
+    ```
+    Client: "Hello WebSocket"
+    Server: "Echo: Hello WebSocket"
+    ```
+    
+    **Disconnect:** Connection closes cleanly when client disconnects
     """
     await websocket.accept()
     try:
@@ -67,14 +83,73 @@ async def authenticate_websocket_user(token: str, db: Session) -> tuple[int, str
 @router.websocket("/tasks")
 async def websocket_tasks_endpoint(
     websocket: WebSocket,
-    token: Optional[str] = Query(None, description="JWT authentication token"),
+    token: Optional[str] = Query(None, description="JWT authentication token for WebSocket connection"),
     db: Session = Depends(get_db)
 ):
     """
     WebSocket endpoint for real-time task updates.
     
-    Requires JWT authentication via query parameter.
-    Sends real-time events for task creation, updates, and deletions.
+    **Authentication:** Required via query parameter
+    
+    **Connection URL:** `/ws/tasks?token=<jwt_token>`
+    
+    **Features:**
+    - Real-time task creation notifications
+    - Task update broadcasts
+    - Task deletion notifications
+    - Task status change events
+    - Connection management with heartbeat
+    - Automatic reconnection support
+    
+    **Message Types Received:**
+    - `ping`: Heartbeat from client
+    - `subscribe`: Subscribe to specific task events
+    - `unsubscribe`: Unsubscribe from task events
+    
+    **Message Types Sent:**
+    - `connection`: Welcome message with connection details
+    - `task_created`: New task was created
+    - `task_updated`: Existing task was modified
+    - `task_deleted`: Task was removed
+    - `task_status_changed`: Task status changed
+    - `heartbeat`: Server heartbeat
+    - `error`: Error messages
+    - `pong`: Response to ping
+    
+    **Example Messages:**
+    ```json
+    // Task Created Event
+    {
+        "type": "task_created",
+        "timestamp": "2024-01-15T10:30:00Z",
+        "data": {
+            "task_id": 123,
+            "title": "New Task",
+            "owner_id": 1,
+            "status": "TODO"
+        }
+    }
+    
+    // Error Message
+    {
+        "type": "error",
+        "timestamp": "2024-01-15T10:30:00Z",
+        "message": "Authentication failed",
+        "code": 1008
+    }
+    ```
+    
+    **Error Codes:**
+    - `1000`: Normal closure
+    - `1003`: Invalid JSON format
+    - `1008`: Authentication failure
+    - `1011`: Server error
+    
+    **Authentication Flow:**
+    1. Include JWT token in query parameter
+    2. Server validates token and user permissions
+    3. Connection established with user context
+    4. Real-time events filtered by user permissions
     """
     connection_id = None
     
@@ -197,28 +272,136 @@ async def handle_client_message(
         logger.warning(f"Unknown message type '{message_type}' from connection {connection_id}")
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    response_model=WebSocketStats,
+    summary="Get WebSocket statistics",
+    description="Retrieve current WebSocket connection statistics",
+    responses={
+        200: {
+            "description": "Statistics retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "total_connections": 15,
+                        "active_connections": 12,
+                        "total_messages_sent": 1234,
+                        "total_messages_received": 987,
+                        "uptime_seconds": 86400,
+                        "peak_connections": 25,
+                        "last_activity": "2024-01-15T10:30:00Z"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        },
+        403: {
+            "description": "Admin access required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Admin role required"}
+                }
+            }
+        }
+    }
+)
 async def get_websocket_stats(
     current_user=Depends(lambda: None)  # Will be replaced with proper auth dependency
 ) -> WebSocketStats:
     """
-    Get WebSocket connection statistics.
+    Get comprehensive WebSocket connection statistics.
     
-    Admin-only endpoint to monitor active connections.
+    **Authentication:** Required (Admin role only)
+    
+    **Response:** Statistics about current WebSocket connections including:
+    - Total number of active connections
+    - Message counts (sent/received)
+    - Peak connection counts
+    - System uptime
+    - Last activity timestamp
+    
+    **Use Cases:**
+    - System monitoring and health checks
+    - Performance analysis
+    - Capacity planning
+    - Debugging connection issues
     """
     # TODO: Add proper authentication dependency
     stats = connection_manager.get_stats()
     return WebSocketStats(**stats)
 
 
-@router.get("/connections")
+@router.get(
+    "/connections",
+    response_model=list[ConnectionInfo],
+    summary="List active WebSocket connections",
+    description="Get detailed information about all active WebSocket connections",
+    responses={
+        200: {
+            "description": "Active connections retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "connection_id": "conn_abc123def456",
+                            "user_id": 1,
+                            "user_role": "ADMIN",
+                            "connected_at": "2024-01-15T10:30:00Z"
+                        },
+                        {
+                            "connection_id": "conn_xyz789uvw012", 
+                            "user_id": 2,
+                            "user_role": "USER",
+                            "connected_at": "2024-01-15T10:45:00Z"
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        },
+        403: {
+            "description": "Admin access required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Admin role required"}
+                }
+            }
+        }
+    }
+)
 async def get_active_connections(
     current_user=Depends(lambda: None)  # Will be replaced with proper auth dependency
 ) -> list[ConnectionInfo]:
     """
-    Get list of active WebSocket connections.
+    Get detailed list of all active WebSocket connections.
     
-    Admin-only endpoint to see all active connections.
+    **Authentication:** Required (Admin role only)
+    
+    **Response:** Array of connection objects containing:
+    - **connection_id**: Unique identifier for the connection
+    - **user_id**: ID of the connected user
+    - **user_role**: Role of the connected user (USER/ADMIN)
+    - **connected_at**: ISO timestamp when connection was established
+    
+    **Use Cases:**
+    - Monitor who is currently connected
+    - Debug connection issues
+    - Security auditing
+    - User session management
     """
     # TODO: Add proper authentication dependency
     connections = []

@@ -23,24 +23,123 @@ from models.auth_models import User
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-@router.get("/", response_model=List[Task])
+@router.get(
+    "/", 
+    response_model=List[Task],
+    summary="List all tasks",
+    description="Get a paginated list of tasks based on user permissions",
+    responses={
+        200: {
+            "description": "Successfully retrieved tasks",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "title": "Complete project documentation",
+                            "description": "Write comprehensive API documentation",
+                            "status": "TODO",
+                            "due_date": "2024-12-31T23:59:59Z",
+                            "attachments": ["doc1.pdf", "spec.md"],
+                            "owner_id": 1,
+                            "created_at": "2024-01-15T10:30:00Z",
+                            "updated_at": "2024-01-15T10:30:00Z"
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        }
+    }
+)
 async def list_tasks(
-    skip: int = Query(0, ge=0, description="Number of tasks to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Number of tasks to return"),
+    skip: int = Query(0, ge=0, description="Number of tasks to skip for pagination"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks to return"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get all tasks with pagination.
+    Retrieve a paginated list of tasks.
     
-    - **Admins**: Can see all tasks
-    - **Users**: Can only see their own tasks
+    **Authentication:** Required (JWT token)
+    
+    **Permissions:**
+    - **ADMIN**: Can view all tasks in the system
+    - **USER**: Can only view their own tasks
+    
+    **Query Parameters:**
+    - **skip**: Number of tasks to skip (for pagination)
+    - **limit**: Maximum number of tasks to return (1-1000)
+    
+    **Response:** Array of task objects with full details
+    
+    **Pagination Example:**
+    - Page 1: `skip=0&limit=10`
+    - Page 2: `skip=10&limit=10`
+    - Page 3: `skip=20&limit=10`
     """
     tasks = get_tasks(db, current_user, skip=skip, limit=limit)
     return tasks
 
 
-@router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", 
+    response_model=Task, 
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new task",
+    description="Create a new task with title, description, and optional metadata",
+    responses={
+        201: {
+            "description": "Task successfully created",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "title": "Complete project documentation",
+                        "description": "Write comprehensive API documentation",
+                        "status": "TODO",
+                        "due_date": "2024-12-31T23:59:59Z",
+                        "attachments": [],
+                        "owner_id": 1,
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-15T10:30:00Z"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        },
+        422: {
+            "description": "Validation Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": [
+                            {
+                                "loc": ["body", "title"],
+                                "msg": "ensure this value has at least 1 characters",
+                                "type": "value_error.any_str.min_length"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+)
 async def create_new_task(
     task_data: TaskCreate,
     db: Session = Depends(get_db),
@@ -49,23 +148,93 @@ async def create_new_task(
     """
     Create a new task.
     
-    The task will be automatically assigned to the current user as the owner.
+    **Authentication:** Required (JWT token)
+    
+    **Request Body:**
+    - **title**: Task title (1-200 characters, required)
+    - **description**: Detailed task description (optional)
+    - **status**: Task status - "TODO", "IN_PROGRESS", or "DONE" (optional, defaults to "TODO")
+    - **due_date**: ISO 8601 datetime string (optional)
+    - **attachments**: List of attachment filenames (optional, typically empty on creation)
+    
+    **Permissions:** All authenticated users can create tasks
+    
+    **Ownership:** The task will be automatically assigned to the current user as the owner
+    
+    **Response:** Complete task object with generated ID and timestamps
     """
     task = create_task(db, task_data, current_user)
     return task
 
 
-@router.get("/{task_id}", response_model=Task)
+@router.get(
+    "/{task_id}", 
+    response_model=Task,
+    summary="Get task by ID",
+    description="Retrieve a specific task by its ID",
+    responses={
+        200: {
+            "description": "Task found and returned",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "title": "Complete project documentation",
+                        "description": "Write comprehensive API documentation",
+                        "status": "IN_PROGRESS",
+                        "due_date": "2024-12-31T23:59:59Z",
+                        "attachments": ["requirements.pdf"],
+                        "owner_id": 1,
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "updated_at": "2024-01-20T14:45:00Z"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        },
+        403: {
+            "description": "Access forbidden - not task owner",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not enough permissions"}
+                }
+            }
+        },
+        404: {
+            "description": "Task not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Task not found"}
+                }
+            }
+        }
+    }
+)
 async def get_task(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get a specific task by ID.
+    Retrieve a specific task by its ID.
     
-    - **Admins**: Can view any task
-    - **Users**: Can only view their own tasks
+    **Authentication:** Required (JWT token)
+    
+    **Path Parameters:**
+    - **task_id**: Unique identifier for the task
+    
+    **Permissions:**
+    - **ADMIN**: Can view any task in the system
+    - **USER**: Can only view their own tasks
+    
+    **Response:** Complete task object with all details
     """
     task = get_task_by_id(db, task_id, current_user)
     if not task:

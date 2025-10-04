@@ -10,11 +10,85 @@ from schemas.auth_schemas import User as UserSchema
 import os
 import asyncio
 
-# Create FastAPI app
+# Create FastAPI app with comprehensive metadata
 app = FastAPI(
-    title="FastAPI Authentication, Task & External API with WebSockets",
-    description="A FastAPI application with JWT authentication, task management, file uploads, external data fetching, and real-time WebSocket updates",
-    version="1.0.0"
+    title="Task Manager Pro API",
+    description="""
+# Task Manager Pro - Full-Stack Application API
+
+A comprehensive FastAPI backend application providing:
+- **JWT Authentication** with role-based access control (USER/ADMIN)
+- **Task Management** with full CRUD operations and file attachments
+- **External API Integration** for motivational quotes with fallback handling
+- **Real-time WebSocket Updates** for live task notifications
+- **File Upload & Management** for task attachments
+- **RESTful API Design** with comprehensive error handling
+
+## Authentication
+
+All protected endpoints require a valid JWT token. Include the token in the `Authorization` header:
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+## User Roles
+
+- **USER**: Can manage their own tasks and access basic features
+- **ADMIN**: Full access to all tasks and administrative functions
+
+## WebSocket Connections
+
+Real-time updates are available via WebSocket at `/ws/tasks` endpoint.
+Authentication is required via query parameter: `?token=<jwt_token>`
+
+## Error Handling
+
+All endpoints provide consistent error responses with detailed error messages,
+proper HTTP status codes, and helpful debugging information.
+    """,
+    version="1.0.0",
+    contact={
+        "name": "Task Manager Pro Support",
+        "email": "support@taskmanagerpro.com",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    tags_metadata=[
+        {
+            "name": "authentication",
+            "description": "User registration, login, and JWT token management",
+        },
+        {
+            "name": "tasks",
+            "description": "Task CRUD operations, file attachments, and statistics",
+        },
+        {
+            "name": "external",
+            "description": "External API integration for motivational quotes",
+        },
+        {
+            "name": "websockets",
+            "description": "Real-time WebSocket connections and management",
+        },
+        {
+            "name": "user",
+            "description": "User profile and role-based access endpoints",
+        },
+        {
+            "name": "admin",
+            "description": "Administrative endpoints (admin role required)",
+        },
+        {
+            "name": "health",
+            "description": "Application health check and monitoring",
+        },
+        {
+            "name": "root",
+            "description": "Public API information endpoints",
+        },
+    ],
 )
 
 # Add CORS middleware
