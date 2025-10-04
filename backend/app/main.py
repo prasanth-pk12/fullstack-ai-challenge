@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from database.connection import create_tables
-from routers import auth_router, task_router
+from routers import auth_router, task_router, external_router
 from services.auth_service import get_current_user, role_required
 from models.auth_models import UserRole, User
 from schemas.auth_schemas import User as UserSchema
@@ -9,8 +9,8 @@ import os
 
 # Create FastAPI app
 app = FastAPI(
-    title="FastAPI Authentication & Task API",
-    description="A FastAPI application with JWT-based authentication, task management, and file uploads",
+    title="FastAPI Authentication, Task & External API",
+    description="A FastAPI application with JWT authentication, task management, file uploads, and external data fetching",
     version="1.0.0"
 )
 
@@ -29,6 +29,7 @@ async def startup():
 # Include routers
 app.include_router(auth_router.router)
 app.include_router(task_router.router)
+app.include_router(external_router.router)
 
 # Protected route examples
 @app.get("/", tags=["root"])
