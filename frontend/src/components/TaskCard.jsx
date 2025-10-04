@@ -246,34 +246,51 @@ const TaskCard = ({
       )}
 
       {/* Footer Info */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <div className="flex items-center gap-4">
-          {task.due_date && (
-            <div className={`flex items-center gap-1 ${isOverdue ? 'text-red-600' : ''}`}>
-              <CalendarIcon className="w-3 h-3" />
-              <span>Due: {formatDate(task.due_date)}</span>
-              {isOverdue && <span className="text-red-600 font-medium">(Overdue)</span>}
-            </div>
-          )}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-4">
+            {task.due_date && (
+              <div className={`flex items-center gap-1 ${isOverdue ? 'text-red-600' : ''}`}>
+                <CalendarIcon className="w-3 h-3" />
+                <span>Due: {formatDate(task.due_date)}</span>
+                {isOverdue && <span className="text-red-600 font-medium">(Overdue)</span>}
+              </div>
+            )}
+          </div>
           
-          {task.attachments && task.attachments.length > 0 && (
-            <button
-              onClick={() => onViewAttachments(task)}
-              className="flex items-center gap-1 hover:text-blue-600 transition-colors"
-            >
-              <PaperClipIcon className="w-3 h-3" />
-              <span>{task.attachments.length} file{task.attachments.length !== 1 ? 's' : ''}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            <UserIcon className="w-3 h-3" />
+            <span>
+              Created by: {task.owner?.username || `User ${task.owner_id}`}
+              {task.owner_id === user?.id && ' (You)'}
+            </span>
+          </div>
         </div>
         
-        <div className="flex items-center gap-1">
-          <UserIcon className="w-3 h-3" />
-          <span>
-            Created by: {task.owner?.username || `User ${task.owner_id}`}
-            {task.owner_id === user?.id && ' (You)'}
-          </span>
-        </div>
+        {/* Attachment Section */}
+        {task.attachment && (
+          <div className="p-2 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <PaperClipIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    {task.attachment.original_filename}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {(task.attachment.file_size / 1024).toFixed(1)} KB
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => onViewAttachments(task)}
+                className="flex-shrink-0 px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+              >
+                View
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Created/Updated timestamps */}

@@ -67,6 +67,7 @@ const authReducer = (state, action) => {
       return {
         ...state,
         user: action.payload,
+        token: action.payload.token, // Make sure token is also set
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -109,11 +110,21 @@ export const AuthProvider = ({ children }) => {
   // Load user on app initialization
   useEffect(() => {
     const loadUser = async () => {
+      console.log('AuthContext: Loading user on app initialization...');
+      
+      // Start loading state
+      dispatch({ type: AUTH_ACTIONS.LOAD_USER_START });
+      
       const token = getToken();
+      console.log('AuthContext: Token from localStorage:', token ? 'exists' : 'missing');
+      
       if (token) {
         try {
           // Decode user data from existing token
+          console.log('AuthContext: Attempting to decode JWT...');
           const tokenPayload = decodeJWTPayload(token);
+          console.log('AuthContext: Decoded token payload:', tokenPayload);
+          
           if (tokenPayload) {
             const userData = {
               id: tokenPayload.user_id,
@@ -122,12 +133,15 @@ export const AuthProvider = ({ children }) => {
               token: token
             };
             
+            console.log('AuthContext: Created user data from token:', userData);
+            
             dispatch({
               type: AUTH_ACTIONS.LOAD_USER_SUCCESS,
               payload: userData,
             });
           } else {
             // Invalid token, remove it
+            console.log('AuthContext: Token payload invalid, removing token');
             removeToken();
             dispatch({
               type: AUTH_ACTIONS.LOAD_USER_FAILURE,
@@ -136,6 +150,7 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (error) {
           // Token decoding failed, remove invalid token
+          console.error('AuthContext: Token decoding failed:', error);
           removeToken();
           dispatch({
             type: AUTH_ACTIONS.LOAD_USER_FAILURE,
@@ -143,6 +158,7 @@ export const AuthProvider = ({ children }) => {
           });
         }
       } else {
+        console.log('AuthContext: No token found');
         dispatch({
           type: AUTH_ACTIONS.LOAD_USER_FAILURE,
           payload: null,
@@ -156,11 +172,27 @@ export const AuthProvider = ({ children }) => {
   // Helper function to decode JWT payload (simple base64 decode)
   const decodeJWTPayload = (token) => {
     try {
-      const payload = token.split('.')[1];
+      console.log('JWT decode: Starting decode process...');
+      const parts = token.split('.');
+      console.log('JWT decode: Token parts count:', parts.length);
+      
+      if (parts.length !== 3) {
+        console.error('JWT decode: Invalid token format, expected 3 parts');
+        return null;
+      }
+      
+      const payload = parts[1];
+      console.log('JWT decode: Payload part length:', payload.length);
+      
       const decoded = atob(payload);
-      return JSON.parse(decoded);
+      console.log('JWT decode: Base64 decoded string:', decoded);
+      
+      const parsed = JSON.parse(decoded);
+      console.log('JWT decode: Parsed JSON:', parsed);
+      
+      return parsed;
     } catch (error) {
-      console.error('Failed to decode JWT:', error);
+      console.error('JWT decode: Failed to decode JWT:', error);
       return null;
     }
   };

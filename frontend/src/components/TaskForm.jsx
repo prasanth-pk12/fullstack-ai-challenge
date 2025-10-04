@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { XMarkIcon, CalendarIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, CalendarIcon, DocumentTextIcon, PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import FileUpload from './FileUpload';
 
 const TaskForm = ({ 
   isOpen, 
@@ -14,11 +15,15 @@ const TaskForm = ({
     title: '',
     description: '',
     status: 'todo',
-    due_date: ''
+    due_date: '',
   });
   const [errors, setErrors] = useState({});
+  const [newAttachmentFile, setNewAttachmentFile] = useState(null);
+  const [removeExistingAttachment, setRemoveExistingAttachment] = useState(false);
 
   const isEditing = !!task;
+  const hasExistingAttachment = task?.attachment && !removeExistingAttachment;
+  const canUploadNew = !hasExistingAttachment;
 
   useEffect(() => {
     if (task) {
@@ -26,18 +31,28 @@ const TaskForm = ({
         title: task.title || '',
         description: task.description || '',
         status: task.status || 'todo',
-        due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : ''
+        due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : '',
       });
     } else {
       setFormData({
         title: '',
         description: '',
         status: 'todo',
-        due_date: ''
+        due_date: '',
       });
     }
     setErrors({});
+    setNewAttachmentFile(null);
+    setRemoveExistingAttachment(false);
   }, [task, isOpen]);
+
+  const handleRemoveExistingAttachment = () => {
+    setRemoveExistingAttachment(true);
+  };
+
+  const handleNewFileSelect = (file) => {
+    setNewAttachmentFile(file);
+  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -78,7 +93,7 @@ const TaskForm = ({
     };
 
     try {
-      await onSubmit(submitData);
+      await onSubmit(submitData, newAttachmentFile, removeExistingAttachment);
       onClose();
       toast.success(isEditing ? 'Task updated successfully!' : 'Task created successfully!');
     } catch (error) {
@@ -95,6 +110,16 @@ const TaskForm = ({
 
   const handleClose = () => {
     if (!isLoading) {
+      // Reset all form states
+      setFormData({
+        title: '',
+        description: '',
+        status: 'todo',
+        due_date: '',
+      });
+      setNewAttachmentFile(null);
+      setRemoveExistingAttachment(false);
+      setErrors({});
       onClose();
     }
   };
@@ -228,6 +253,77 @@ const TaskForm = ({
                 </div>
                 {errors.due_date && (
                   <p className="mt-1 text-sm text-red-600">{errors.due_date}</p>
+                )}
+              </div>
+
+              {/* Single Attachment Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attachment (Optional)
+                </label>
+                
+                {/* Show existing attachment if present */}
+                {hasExistingAttachment && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <PaperClipIcon className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {task.attachment.original_filename}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {(task.attachment.file_size / 1024).toFixed(1)} KB
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveExistingAttachment}
+                        className="flex items-center gap-1 text-red-600 hover:text-red-800 text-sm font-medium"
+                        disabled={isLoading}
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show upload area if no existing attachment or after removal */}
+                {canUploadNew && (
+                  <FileUpload
+                    onUpload={(file) => {
+                      handleNewFileSelect(file);
+                      return Promise.resolve();
+                    }}
+                    disabled={isLoading}
+                    multiple={false}
+                    maxSize={10 * 1024 * 1024} // 10MB
+                  />
+                )}
+
+                {/* Show selected new file */}
+                {newAttachmentFile && (
+                  <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <PaperClipIcon className="w-4 h-4 text-green-600" />
+                        <span className="text-sm text-green-800">
+                          New file: {newAttachmentFile.name}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewAttachmentFile(null)}
+                        className="text-green-600 hover:text-green-800"
+                      >
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 

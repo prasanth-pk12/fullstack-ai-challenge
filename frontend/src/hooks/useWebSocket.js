@@ -7,7 +7,7 @@ export const useWebSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
   const [taskEvents, setTaskEvents] = useState([]);
-  const { user, token } = useAuth();
+  const { user, token, isLoading } = useAuth();
   
   // Use refs to avoid stale closures
   const eventListenersRef = useRef(new Map());
@@ -15,6 +15,7 @@ export const useWebSocket = () => {
 
   // Connection status handler
   const handleStatusChange = useCallback((status) => {
+    console.log(`useWebSocket: Status change received: ${status}`);
     setConnectionStatus(status);
     setIsConnected(status === 'connected');
   }, []);
@@ -40,20 +41,26 @@ export const useWebSocket = () => {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    if (!user || !token) {
-      // Disconnect if user is not authenticated
-      webSocketService.disconnect();
+    console.log(`WebSocket Hook: Effect triggered - isLoading: ${isLoading}, user: ${user ? user.username : 'null'}, token: ${token ? 'exists' : 'null'}`);
+    
+    // Wait for auth loading to complete
+    if (isLoading) {
+      console.log('WebSocket: Waiting for auth to complete loading...');
       return;
     }
-
-    // Only connect WebSocket for admin users
-    // Regular users don't need real-time updates from other users
-    if (user.role !== 'admin') {
-      // For non-admin users, set disconnected status and return
+    
+    if (!user || !token) {
+      // Disconnect if user is not authenticated
+      console.log('WebSocket: No user or token, disconnecting');
+      webSocketService.disconnect();
       setConnectionStatus('disconnected');
       setIsConnected(false);
       return;
     }
+
+    // Connect WebSocket for all authenticated users
+    // Users receive updates for their own tasks, admins receive updates for all tasks
+    console.log(`WebSocket: Setting up connection for user (${user.role}) - Username: ${user.username}`);
 
     // Set up status listener
     const unsubscribeStatus = webSocketService.onStatusChange(handleStatusChange);
@@ -68,10 +75,11 @@ export const useWebSocket = () => {
 
     // Cleanup on unmount or user change
     return () => {
+      console.log('WebSocket: Cleaning up connection listeners');
       unsubscribeStatus();
       unsubscribeMessage();
     };
-  }, [user, token, handleStatusChange, handleMessage]);
+  }, [user, token, isLoading, handleStatusChange, handleMessage]);
 
   // Subscribe to specific event types
   const subscribe = useCallback((eventType, callback) => {

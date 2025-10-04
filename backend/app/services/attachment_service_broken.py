@@ -35,7 +35,7 @@ def validate_file(file: UploadFile) -> None:
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No file selected for upload"
+            detail="File must have a filename"
         )
     
     # Check file extension
@@ -43,79 +43,55 @@ def validate_file(file: UploadFile) -> None:
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type '{file_ext}' not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
+            detail=f"File type {file_ext} not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
         )
     
-    # Check content type
-    if not file.content_type:
+    # Check file size (FastAPI doesn't automatically validate this)
+    if hasattr(file, 'size') and file.size and file.size > MAX_FILE_SIZE:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not determine file content type"
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size too large. Maximum size: {MAX_FILE_SIZE / (1024*1024):.1f}MB"
         )
 
 
 def generate_unique_filename(original_filename: str) -> str:
-    """Generate a unique filename to prevent conflicts"""
-    file_ext = Path(original_filename).suffix.lower()
+    """Generate a unique filename to avoid conflicts"""
+    file_ext = Path(original_filename).suffix
     unique_id = str(uuid.uuid4())
     return f"{unique_id}{file_ext}"
 
 
 async def save_file_to_disk(file: UploadFile, filename: str) -> tuple[str, int]:
-    """Save uploaded file to disk and return file path and size"""
+    """Save uploaded file to disk and return (path, size)"""
     file_path = os.path.join(UPLOAD_DIR, filename)
     file_size = 0
     
-    try:
-        async with aiofiles.open(file_path, 'wb') as f:
-            while chunk := await file.read(8192):  # Read in 8KB chunks
-                file_size += len(chunk)
-                
-                # Check file size limit
-                if file_size > MAX_FILE_SIZE:
-                    # Clean up the partial file
-                    await f.close()
-                    os.remove(file_path)
-                    raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail=f"File too large. Maximum size allowed: {MAX_FILE_SIZE / (1024*1024):.1f}MB"
-                    )
-                
-                await f.write(chunk)
-    except Exception as e:
-        # Clean up on error
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save file"
-        )
-    finally:
-        await file.close()
+    async with aiofiles.open(file_path, 'wb') as f:
+        while chunk := await file.read(8192):  # Read in 8KB chunks
+            file_size += len(chunk)
+            await f.write(chunk)
     
     return file_path, file_size
 
 
 def create_attachment_record(
-    db: Session, 
-    task_id: int, 
-    filename: str, 
-    original_filename: str, 
-    file_path: str, 
-    file_size: int, 
-    content_type: str, 
+    db: Session,
+    task_id: int,
+    filename: str,
+    original_filename: str,
+    file_path: str,
+    file_size: int,
+    content_type: str,
     uploaded_by: int
 ) -> Attachment:
-    """Create attachment record in database"""
+    """Create attachment database record"""
     attachment = Attachment(
+        task_id=task_id,
         filename=filename,
         original_filename=original_filename,
         file_path=file_path,
         file_size=file_size,
         content_type=content_type,
-        task_id=task_id,
         uploaded_by=uploaded_by
     )
     
@@ -142,14 +118,17 @@ async def upload_file_for_task(
         )
     
     # Check if user has permission to upload to this task
-    is_admin = current_user.role == UserRole.ADMIN
+    # Note: We compare the enum values directly since current_user is loaded from DB
+    is_admin = current_user.role.value == UserRole.ADMIN.value
     is_owner = task.owner_id == current_user.id
 
     if not (is_admin or is_owner):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to upload files to this task"
-        )    # Validate file
+        )
+    
+    # Validate file
     validate_file(file)
     
     # Check if task already has an attachment and remove it
@@ -190,7 +169,6 @@ async def upload_file_for_task(
         
         # Emit WebSocket event for task update after attachment upload
         try:
-            logger.info(f"Attempting to emit WebSocket event for task {task_id} after attachment upload")
             # Get the updated task with attachment
             updated_task = db.query(Task).options(
                 joinedload(Task.owner),
@@ -198,14 +176,10 @@ async def upload_file_for_task(
             ).filter(Task.id == task_id).first()
             
             if updated_task:
-                logger.info(f"Found updated task {updated_task.id}, emitting WebSocket event...")
-                await _emit_task_updated_after_attachment(updated_task, current_user.id)
-                logger.info(f"Successfully emitted WebSocket event for task {task_id}")
-            else:
-                logger.error(f"Could not find updated task {task_id} for WebSocket emission")
+                asyncio.create_task(_emit_task_updated_after_attachment(updated_task, current_user.id))
                 
         except Exception as e:
-            logger.error(f"Failed to emit task updated event after attachment upload: {str(e)}", exc_info=True)
+            logger.error(f"Failed to emit task updated event after attachment upload: {str(e)}")
         
         return attachment
     except Exception as e:
@@ -214,14 +188,38 @@ async def upload_file_for_task(
             os.remove(file_path)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save attachment record"
+            detail=f"Failed to save attachment: {str(e)}"
         )
 
 
-def get_task_attachments(db: Session, task_id: int, current_user: User) -> List[Attachment]:
-    """Get all attachments for a task with RBAC"""
+async def get_file_by_id(db: Session, attachment_id: int, current_user: User) -> Attachment:
+    """Get a file by ID with permission check"""
+    attachment = db.query(Attachment).options(
+        joinedload(Attachment.task).joinedload(Task.owner)
+    ).filter(Attachment.id == attachment_id).first()
     
-    # Validate task exists and user has permission
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment not found"
+        )
+    
+    # Check permissions (admin, task owner, or file uploader can access)
+    is_admin = current_user.role.value == UserRole.ADMIN.value
+    is_owner = attachment.task.owner_id == current_user.id
+
+    if not (is_admin or is_owner):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this file"
+        )
+    
+    return attachment
+
+
+async def get_files_for_task(db: Session, task_id: int, current_user: User) -> List[Attachment]:
+    """Get all files for a specific task with permission check"""
+    # Check if task exists and user has permission
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(
@@ -229,46 +227,42 @@ def get_task_attachments(db: Session, task_id: int, current_user: User) -> List[
             detail="Task not found"
         )
     
-    # Check if user has permission to view this task
-    is_admin = current_user.role.value == UserRole.ADMIN.value
-    is_owner = task.owner_id == current_user.id
-    
-    if not (is_admin or is_owner):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view attachments for this task"
-        )
-    
-    return db.query(Attachment).filter(Attachment.task_id == task_id).all()
-
-
-async def delete_attachment(db: Session, attachment_id: int, current_user: User) -> bool:
-    """Delete an attachment with RBAC"""
-    
-    attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
-    if not attachment:
-        return False
-    
-    # Get the task to check permissions
-    task = db.query(Task).options(
-        joinedload(Task.owner),
-        joinedload(Task.attachment)
-    ).filter(Task.id == attachment.task_id).first()
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Associated task not found"
-        )
-    
-    # Check if user has permission to delete this attachment
+    # Check permissions
     is_admin = current_user.role.value == UserRole.ADMIN.value
     is_task_owner = task.owner_id == current_user.id
-    is_file_uploader = attachment.uploaded_by == current_user.id
-    
+    is_file_uploader = current_user.id == task.owner_id  # Same as owner for now
+
     if not (is_admin or is_task_owner or is_file_uploader):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to delete this attachment"
+            detail="Not authorized to view files for this task"
+        )
+    
+    # Get attachments for the task
+    attachments = db.query(Attachment).filter(Attachment.task_id == task_id).all()
+    return attachments
+
+
+async def delete_attachment(db: Session, attachment_id: int, current_user: User) -> None:
+    """Delete an attachment with permission check"""
+    attachment = db.query(Attachment).options(
+        joinedload(Attachment.task).joinedload(Task.owner)
+    ).filter(Attachment.id == attachment_id).first()
+    
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment not found"
+        )
+    
+    # Check permissions (only admin or task owner can delete)
+    is_admin = current_user.role.value == UserRole.ADMIN.value
+    is_owner = attachment.task.owner_id == current_user.id
+
+    if not (is_admin or is_owner):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this file"
         )
     
     # Delete file from disk
@@ -278,37 +272,16 @@ async def delete_attachment(db: Session, attachment_id: int, current_user: User)
     # Delete from database
     db.delete(attachment)
     db.commit()
-    
-    # Emit WebSocket event for task update after attachment deletion
-    try:
-        # Get the updated task (now without attachment)
-        updated_task = db.query(Task).options(
-            joinedload(Task.owner),
-            joinedload(Task.attachment)
-        ).filter(Task.id == task.id).first()
-        
-        if updated_task:
-            await _emit_task_updated_after_attachment(updated_task, current_user.id)
-            
-    except Exception as e:
-        logger.error(f"Failed to emit task updated event after attachment deletion: {str(e)}")
-    
-    return True
 
 
 async def _emit_task_updated_after_attachment(task: Task, updated_by_user_id: int):
     """Helper function to emit task updated event after attachment operation"""
     try:
-        logger.info(f"Starting WebSocket emission for task {task.id} updated by user {updated_by_user_id}")
-        
-        from services.websocket_service import task_event_broadcaster
         from schemas.task_schemas import TaskWithOwner
         
         # Convert task to dict using schema
-        logger.info(f"Converting task {task.id} to schema...")
         task_schema = TaskWithOwner.from_task_model(task)
         task_dict = task_schema.dict()
-        logger.info(f"Task schema created successfully, attachment included: {task_dict.get('attachment') is not None}")
         
         # Get user info
         user_info = {
@@ -318,16 +291,11 @@ async def _emit_task_updated_after_attachment(task: Task, updated_by_user_id: in
             "role": task.owner.role.value
         } if task.owner else None
         
-        logger.info(f"Broadcasting task_updated event to owner {task.owner_id}, updater {updated_by_user_id}, and all admins")
-        
         await task_event_broadcaster.broadcast_task_updated(
             task_dict,
             updated_by_user_id,
             task.owner_id,
             user_info
         )
-        
-        logger.info(f"Successfully broadcast task_updated event for task {task.id}")
-        
     except Exception as e:
-        logger.error(f"Error broadcasting task updated event after attachment: {str(e)}", exc_info=True)
+        logger.error(f"Error broadcasting task updated event after attachment: {str(e)}")

@@ -1,5 +1,20 @@
 import { getToken } from './api';
 
+// Helper function to decode JWT and check user role
+function getUserRoleFromToken() {
+  try {
+    const token = getToken();
+    if (!token) return null;
+    
+    // Basic JWT decode (just for role checking, not for security)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.role;
+  } catch (error) {
+    console.error('Failed to decode token for role check:', error);
+    return null;
+  }
+}
+
 export class WebSocketService {
   constructor() {
     this.ws = null;
@@ -22,6 +37,16 @@ export class WebSocketService {
       return Promise.resolve();
     }
 
+    // Allow all authenticated users to connect
+    // Backend will handle sending appropriate events based on user permissions
+    const userRole = getUserRoleFromToken();
+    if (!userRole) {
+      console.log('WebSocket: No valid token found, connection skipped');
+      this._setStatus('disconnected');
+      return Promise.resolve();
+    }
+
+    console.log(`WebSocket: Connecting user with role: ${userRole}`);
     this.isManuallyDisconnected = false;
     return this._connect();
   }
@@ -31,21 +56,24 @@ export class WebSocketService {
       try {
         const token = getToken();
         if (!token) {
+          console.error('WebSocket: No authentication token available');
           this._setStatus('error');
           reject(new Error('No authentication token available'));
           return;
         }
 
+        console.log('WebSocket: Token found, attempting connection...');
         this._setStatus('connecting');
-        console.log('Connecting to WebSocket...');
 
         // Create WebSocket connection with token authentication
         const wsUrl = `${process.env.REACT_APP_WS_URL || 'ws://localhost:8000'}/ws/tasks?token=${encodeURIComponent(token)}`;
+        console.log('WebSocket: Connecting to:', wsUrl.replace(/token=[^&]*/, 'token=***'));
+        
         this.ws = new WebSocket(wsUrl);
 
         // Connection opened
         this.ws.onopen = () => {
-          console.log('WebSocket connected');
+          console.log('WebSocket: Connection successful');
           this._setStatus('connected');
           this.reconnectAttempts = 0;
           this.reconnectDelay = 1000; // Reset delay
@@ -65,11 +93,15 @@ export class WebSocketService {
 
         // Connection closed
         this.ws.onclose = (event) => {
-          console.log('WebSocket disconnected:', event.code, event.reason);
-          this._setStatus('disconnected');
+          console.log(`WebSocket: Connection closed - Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
           this._stopHeartbeat();
           
-          if (!this.isManuallyDisconnected && !event.wasClean) {
+          // Only set to disconnected if we're not going to reconnect
+          if (this.isManuallyDisconnected || event.wasClean) {
+            this._setStatus('disconnected');
+          } else {
+            // For unexpected disconnections, attempt reconnect immediately
+            console.log('WebSocket: Unexpected disconnection, will attempt reconnect...');
             this._attemptReconnect();
           }
         };
@@ -81,6 +113,17 @@ export class WebSocketService {
           this._stopHeartbeat();
           reject(error);
         };
+
+        // Handle specific HTTP errors during handshake
+        this.ws.addEventListener('close', (event) => {
+          if (event.code === 1006 && event.reason === '') {
+            // This often indicates an HTTP error during handshake
+            console.log('WebSocket closed with code 1006, likely HTTP error during handshake');
+          } else if (event.code === 1002) {
+            // Protocol error
+            console.log('WebSocket protocol error');
+          }
+        });
 
       } catch (error) {
         this._setStatus('error');
@@ -131,6 +174,8 @@ export class WebSocketService {
     // Reset missed heartbeats on any message
     this.missedHeartbeats = 0;
     
+    console.log('WebSocket message received:', data);
+    
     // Handle pong response
     if (data.type === 'pong') {
       return;
@@ -138,7 +183,9 @@ export class WebSocketService {
 
     // Handle task events
     if (data.type && this.listeners.has(data.type)) {
+      console.log(`Processing WebSocket event: ${data.type}`, data);
       const callbacks = this.listeners.get(data.type);
+      console.log(`Found ${callbacks.size} callbacks for event type: ${data.type}`);
       callbacks.forEach(callback => {
         try {
           callback(data);
@@ -146,6 +193,8 @@ export class WebSocketService {
           console.error('Error in WebSocket message handler:', error);
         }
       });
+    } else {
+      console.log(`No listeners found for event type: ${data.type}`);
     }
 
     // Handle generic message listeners
@@ -164,22 +213,32 @@ export class WebSocketService {
   // Reconnection logic
   _attemptReconnect() {
     if (this.isManuallyDisconnected || this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('Max reconnection attempts reached or manually disconnected');
+      console.log(`WebSocket: Reconnection stopped - Manual disconnect: ${this.isManuallyDisconnected}, Max attempts reached: ${this.reconnectAttempts >= this.maxReconnectAttempts}`);
       this._setStatus('error');
       return;
     }
 
     this.reconnectAttempts++;
-    console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${this.reconnectDelay}ms`);
+    console.log(`WebSocket: Attempting reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
+    
+    // Set status to connecting before attempting reconnect
+    this._setStatus('connecting');
 
     setTimeout(() => {
       if (!this.isManuallyDisconnected) {
-        this._connect().catch(() => {
+        console.log('WebSocket: Executing reconnection attempt...');
+        this._connect().catch((error) => {
+          console.error('WebSocket: Reconnection failed:', error);
+          // Only set to disconnected if this was the last attempt
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this._setStatus('error');
+          }
           // Exponential backoff with jitter
           this.reconnectDelay = Math.min(
             this.reconnectDelay * 2 + Math.random() * 1000,
             this.maxReconnectDelay
           );
+          console.log(`WebSocket: Next reconnect delay: ${this.reconnectDelay}ms`);
         });
       }
     }, this.reconnectDelay);
@@ -208,6 +267,7 @@ export class WebSocketService {
   // Connection status management
   _setStatus(status) {
     if (this.connectionStatus !== status) {
+      console.log(`WebSocket: Status change: ${this.connectionStatus} -> ${status}`);
       this.connectionStatus = status;
       this.statusListeners.forEach(listener => {
         try {

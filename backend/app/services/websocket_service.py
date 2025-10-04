@@ -120,10 +120,18 @@ class ConnectionManager:
             if conn_info["user_role"] == "admin"
         ]
         
-        for connection_id in admin_connections:
-            await self.send_personal_message(connection_id, message)
+        logger.info(f"Broadcasting to admins: Found {len(admin_connections)} admin connections out of {len(self.active_connections)} total connections")
+        logger.info(f"Message type: {message.get('type')}, Task ID: {message.get('task', {}).get('id')}")
         
-        logger.debug(f"Broadcast admin message to {len(admin_connections)} admin connections")
+        for connection_id in admin_connections:
+            conn_info = self.active_connections.get(connection_id)
+            if conn_info:
+                logger.info(f"Sending to admin connection {connection_id} (user_id: {conn_info['user_id']}, role: {conn_info['user_role']})")
+                await self.send_personal_message(connection_id, message)
+            else:
+                logger.warning(f"Admin connection {connection_id} not found in active connections")
+        
+        logger.info(f"Successfully broadcast admin message to {len(admin_connections)} admin connections")
     
     def get_connection_info(self, connection_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a specific connection"""

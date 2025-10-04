@@ -8,7 +8,7 @@ import {
   ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
-import { tasksAPI } from '../services/api';
+import { tasksAPI, getToken } from '../services/api';
 import FileUpload from './FileUpload';
 import toast from 'react-hot-toast';
 
@@ -27,24 +27,39 @@ const AttachmentViewer = ({
   const canUpload = user?.role === 'ADMIN' || task?.owner_id === user?.id;
   const canDelete = user?.role === 'ADMIN' || task?.owner_id === user?.id;
 
-  useEffect(() => {
-    const loadAttachments = async () => {
-      setIsLoading(true);
-      try {
-        const data = await tasksAPI.getTaskAttachments(task.id);
-        setAttachments(data);
-      } catch (error) {
-        toast.error('Failed to load attachments');
-        console.error('Error loading attachments:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Helper function to create authenticated file URLs
+  const getAuthenticatedFileUrl = (fileUrl) => {
+    const token = getToken();
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    if (token && fileUrl) {
+      // If fileUrl is relative, make it absolute and add token
+      const fullUrl = fileUrl.startsWith('http') ? fileUrl : `${baseUrl}${fileUrl}`;
+      return `${fullUrl}?token=${token}`;
+    }
+    return fileUrl;
+  };
 
-    if (isOpen && task?.id) {
+  useEffect(() => {
+    if (isOpen && task?.attachment) {
+      // For single attachment, just set the attachment directly
+      setAttachments([task.attachment]);
+    } else if (isOpen && task?.id) {
+      // If no attachment in task object, try loading from API (fallback)
+      const loadAttachments = async () => {
+        setIsLoading(true);
+        try {
+          const data = await tasksAPI.getTaskAttachments(task.id);
+          setAttachments(data);
+        } catch (error) {
+          toast.error('Failed to load attachments');
+          console.error('Error loading attachments:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
       loadAttachments();
     }
-  }, [isOpen, task?.id]);
+  }, [isOpen, task?.id, task?.attachment]);
 
   const refreshAttachments = async () => {
     setIsLoading(true);
@@ -109,6 +124,16 @@ const AttachmentViewer = ({
     } else {
       return '📄';
     }
+  };
+
+  const canPreview = (contentType) => {
+    return contentType?.includes('pdf') || 
+           contentType?.startsWith('image/') || 
+           contentType?.includes('text/');
+  };
+
+  const shouldDownload = (contentType) => {
+    return !canPreview(contentType);
   };
 
   const formatFileSize = (bytes) => {
@@ -227,9 +252,16 @@ const AttachmentViewer = ({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
                               {attachment.original_filename}
+                              {canPreview(attachment.content_type) && (
+                                <span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+                                  Previewable
+                                </span>
+                              )}
                             </p>
                             <div className="flex items-center space-x-2 text-xs text-gray-500">
                               <span>{formatFileSize(attachment.file_size)}</span>
+                              <span>•</span>
+                              <span>{attachment.content_type}</span>
                               <span>•</span>
                               <span>{formatDate(attachment.uploaded_at)}</span>
                             </div>
@@ -238,19 +270,46 @@ const AttachmentViewer = ({
                         
                         <div className="flex items-center space-x-2">
                           {/* View/Download Button */}
-                          <a
-                            href={attachment.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                            title="View/Download"
-                          >
-                            {attachment.content_type?.startsWith('image/') ? (
+                          {canPreview(attachment.content_type) ? (
+                            // Previewable files - Open in new tab
+                            <a
+                              href={getAuthenticatedFileUrl(attachment.file_url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title={
+                                attachment.content_type?.includes('pdf') 
+                                  ? 'Open PDF in new tab' 
+                                  : attachment.content_type?.startsWith('image/')
+                                    ? 'View image in new tab'
+                                    : 'Preview in new tab'
+                              }
+                            >
                               <EyeIcon className="w-4 h-4" />
-                            ) : (
+                            </a>
+                          ) : (
+                            // Non-previewable files - Direct download
+                            <a
+                              href={getAuthenticatedFileUrl(attachment.file_url)}
+                              download={attachment.original_filename}
+                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                              title={`Download ${attachment.original_filename}`}
+                            >
                               <ArrowDownTrayIcon className="w-4 h-4" />
-                            )}
-                          </a>
+                            </a>
+                          )}
+                          
+                          {/* Additional Download Option for Previewable Files */}
+                          {canPreview(attachment.content_type) && (
+                            <a
+                              href={getAuthenticatedFileUrl(attachment.file_url)}
+                              download={attachment.original_filename}
+                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                              title={`Download ${attachment.original_filename}`}
+                            >
+                              <ArrowDownTrayIcon className="w-4 h-4" />
+                            </a>
+                          )}
                           
                           {/* Delete Button */}
                           {canDelete && (

@@ -22,15 +22,15 @@ class Task(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     status = Column(SQLAlchemyEnum(TaskStatus), default=TaskStatus.TODO, nullable=False)
     due_date = Column(DateTime, nullable=True)
-    attachments = Column(JSON, default=list, nullable=False)
+    attachments = Column(JSON, default=list, nullable=False)  # Keep for backward compatibility, but will be deprecated
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationship to User model
     owner = relationship("User", back_populates="tasks")
     
-    # Relationship to Attachment model
-    file_attachments = relationship("Attachment", back_populates="task", cascade="all, delete-orphan")
+    # Single attachment relationship (one-to-one)
+    attachment = relationship("Attachment", back_populates="task", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Task(id={self.id}, title='{self.title}', status='{self.status.value}', owner_id={self.owner_id})>"

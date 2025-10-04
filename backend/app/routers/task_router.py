@@ -91,7 +91,7 @@ async def list_tasks(
     - Page 3: `skip=20&limit=10`
     """
     tasks = get_tasks(db, current_user, skip=skip, limit=limit)
-    return tasks
+    return [TaskWithOwner.from_task_model(task) for task in tasks]
 
 
 @router.post(
@@ -169,7 +169,7 @@ async def create_new_task(
     **Response:** Complete task object with generated ID and timestamps
     """
     task = create_task(db, task_data, current_user)
-    return task
+    return TaskWithOwner.from_task_model(task)
 
 
 @router.get(
@@ -252,7 +252,7 @@ async def get_task(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
-    return task
+    return TaskWithOwner.from_task_model(task)
 
 
 @router.put("/{task_id}", response_model=TaskWithOwner)
@@ -274,7 +274,7 @@ async def update_existing_task(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found"
         )
-    return task
+    return TaskWithOwner.from_task_model(task)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -377,7 +377,7 @@ async def delete_task_attachment(
       - **File Uploader**: Can delete files they uploaded
       - **Admin**: Can delete any attachment
     """
-    success = delete_attachment(db, attachment_id, current_user)
+    success = await delete_attachment(db, attachment_id, current_user)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

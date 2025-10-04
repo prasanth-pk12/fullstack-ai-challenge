@@ -14,17 +14,26 @@ def get_tasks(db: Session, current_user: User, skip: int = 0, limit: int = 100) 
     """Get tasks based on user permissions"""
     if current_user.role.value == UserRole.ADMIN.value:
         # Admins can see all tasks
-        return db.query(Task).options(joinedload(Task.owner)).offset(skip).limit(limit).all()
+        return db.query(Task).options(
+            joinedload(Task.owner),
+            joinedload(Task.attachment)
+        ).offset(skip).limit(limit).all()
     else:
         # Users can only see their own tasks
-        return db.query(Task).options(joinedload(Task.owner)).filter(
+        return db.query(Task).options(
+            joinedload(Task.owner),
+            joinedload(Task.attachment)
+        ).filter(
             Task.owner_id == current_user.id
         ).offset(skip).limit(limit).all()
 
 
 def get_task_by_id(db: Session, task_id: int, current_user: User) -> Optional[Task]:
     """Get task by ID with RBAC check"""
-    task = db.query(Task).options(joinedload(Task.owner)).filter(Task.id == task_id).first()
+    task = db.query(Task).options(
+        joinedload(Task.owner),
+        joinedload(Task.attachment)
+    ).filter(Task.id == task_id).first()
     
     if not task:
         return None

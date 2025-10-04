@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   WifiIcon, 
@@ -10,12 +10,30 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useAuth } from '../contexts/AuthContext';
 
 const ConnectionStatus = ({ className = '' }) => {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { connectionStatus, reconnect } = useWebSocket();
+  const [canShowDisconnected, setCanShowDisconnected] = useState(false);
+
+  // Allow showing disconnected status after auth loads and some time passes
+  useEffect(() => {
+    if (!authLoading && user) {
+      const timer = setTimeout(() => {
+        setCanShowDisconnected(true);
+      }, 3000); // Give 3 seconds for connection to establish
+      return () => clearTimeout(timer);
+    } else {
+      setCanShowDisconnected(false);
+    }
+  }, [authLoading, user]);
+
+  // Show connection status for all authenticated users
+  if (!user) {
+    return null;
+  }
 
   // Only show connection status for admin users
-  // Regular users don't need WebSocket connections
-  if (!user || user.role !== 'admin') {
+  // Regular users don't need to see WebSocket connection details
+  if (user.role !== 'admin') {
     return null;
   }
 
@@ -73,8 +91,10 @@ const ConnectionStatus = ({ className = '' }) => {
   const config = getStatusConfig();
   const Icon = config.icon;
 
-  // Show connection status only when not connected or when there's an issue
-  const shouldShow = connectionStatus !== 'connected';
+  // Show status when there's an error OR when disconnected after sufficient time
+  const shouldShow = connectionStatus === 'error' || 
+                     connectionStatus === 'connecting' ||
+                     (connectionStatus === 'disconnected' && canShowDisconnected);
 
   return (
     <AnimatePresence>
@@ -136,7 +156,14 @@ const ConnectionStatus = ({ className = '' }) => {
 
 // Compact version for header/navigation areas
 export const ConnectionStatusIndicator = ({ className = '' }) => {
+  const { user } = useAuth();
   const { connectionStatus } = useWebSocket();
+
+  // Only show connection status indicator for admin users
+  // Regular users don't need to see WebSocket connection details
+  if (!user || user.role !== 'admin') {
+    return null;
+  }
 
   const getIndicatorConfig = () => {
     switch (connectionStatus) {

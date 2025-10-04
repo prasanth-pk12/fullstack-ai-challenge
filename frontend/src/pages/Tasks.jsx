@@ -17,6 +17,7 @@ import TaskCard from '../components/TaskCard';
 import TaskForm from '../components/TaskForm';
 import AttachmentViewer from '../components/AttachmentViewer';
 import ConnectionStatus from '../components/ConnectionStatus';
+import Quote from '../components/Quote';
 import toast from 'react-hot-toast';
 
 const Tasks = () => {
@@ -79,7 +80,9 @@ const Tasks = () => {
       
       // Show toast notification if task was updated by another user
       if (user && eventUser && eventUser.id !== user.id) {
-        toast.info(`Task "${task.title}" was updated by ${eventUser.username || eventUser.name}`);
+        toast(`Task "${task.title}" was updated by ${eventUser.username || eventUser.name}`, {
+          icon: 'ℹ️',
+        });
       }
       
       // Mark as recently updated for animation
@@ -105,7 +108,12 @@ const Tasks = () => {
       
       // Show toast notification if task was deleted by another user
       if (user && eventUser && eventUser.id !== user.id && taskToDelete) {
-        toast.warning(`Task "${taskToDelete.title}" was deleted by ${eventUser.username || eventUser.name}`);
+        toast(`Task "${taskToDelete.title}" was deleted by ${eventUser.username || eventUser.name}`, {
+          icon: '⚠️',
+          style: {
+            borderLeft: '4px solid #f59e0b',
+          }
+        });
       }
       
       return newTasks;
@@ -113,7 +121,7 @@ const Tasks = () => {
   }, [user]);
 
   // Set up WebSocket event handlers
-  const { isConnected, connectionStatus } = useTaskEvents({
+  const { isConnected } = useTaskEvents({
     onTaskCreated: handleTaskCreated,
     onTaskUpdated: handleTaskUpdated,
     onTaskDeleted: handleTaskDeleted
@@ -191,9 +199,26 @@ const Tasks = () => {
     }
   };
 
-  const handleCreateTask = async (taskData) => {
+  const handleCreateTask = async (taskData, newAttachmentFile = null) => {
     try {
       const newTask = await tasksAPI.createTask(taskData);
+      
+      // Upload attachment if provided
+      if (newAttachmentFile) {
+        try {
+          await tasksAPI.uploadFile(newTask.id, newAttachmentFile);
+          toast.success('Task created with attachment!');
+        } catch (uploadError) {
+          toast('Task created but attachment failed to upload', {
+            icon: '⚠️',
+            style: {
+              borderLeft: '4px solid #f59e0b',
+            }
+          });
+          console.error('Attachment upload error:', uploadError);
+        }
+      }
+      
       // Don't reload tasks here - WebSocket will handle the update
       // Only add to local state if WebSocket is not connected
       if (!isConnected) {
@@ -205,9 +230,21 @@ const Tasks = () => {
     }
   };
 
-  const handleEditTask = async (taskData) => {
+  const handleEditTask = async (taskData, newAttachmentFile = null, removeExistingAttachment = false) => {
     try {
+      // Remove existing attachment if requested
+      if (removeExistingAttachment && editingTask.attachment) {
+        await tasksAPI.deleteAttachment(editingTask.attachment.id);
+      }
+
+      // Update the task data
       const updatedTask = await tasksAPI.updateTask(editingTask.id, taskData);
+      
+      // Upload new attachment if provided
+      if (newAttachmentFile) {
+        await tasksAPI.uploadFile(editingTask.id, newAttachmentFile);
+      }
+
       // Don't reload tasks here - WebSocket will handle the update
       // Only update local state if WebSocket is not connected
       if (!isConnected) {
@@ -316,10 +353,13 @@ const Tasks = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards and Inspiration */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Connection Status */}
         <ConnectionStatus className="mb-6" />
+        
+        {/* Quote Component */}
+        <Quote className="mb-6" autoRefresh={true} refreshInterval={60000} />
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <motion.div
