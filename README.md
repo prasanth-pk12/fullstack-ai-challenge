@@ -93,11 +93,6 @@ The `docker-compose.yml` includes three services:
 Key environment variables are configured in `docker-compose.yml`:
 
 ```yaml
-# Database
-POSTGRES_DB: taskmanager
-POSTGRES_USER: taskuser
-POSTGRES_PASSWORD: taskpass
-
 # Backend
 DATABASE_URL: postgresql://taskuser:taskpass@database:5432/taskmanager
 SECRET_KEY: your-super-secret-key-change-in-production
