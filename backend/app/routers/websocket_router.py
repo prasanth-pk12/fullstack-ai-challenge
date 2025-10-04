@@ -26,6 +26,21 @@ router = APIRouter(prefix="/ws", tags=["websockets"])
 security = HTTPBearer()
 
 
+@router.websocket("")
+async def websocket_basic_endpoint(websocket: WebSocket):
+    """
+    Basic WebSocket endpoint for testing connectivity.
+    No authentication required.
+    """
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Echo: {data}")
+    except WebSocketDisconnect:
+        pass
+
+
 async def authenticate_websocket_user(token: str, db: Session) -> tuple[int, str]:
     """Authenticate WebSocket connection using JWT token"""
     try:
