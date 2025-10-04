@@ -8,6 +8,76 @@ I have included the prompts I used, along with the minimal AI-generated code for
 
 ---
 
+## 📦 Third-Party Packages Used
+
+### Backend Dependencies (Python)
+
+**Core Framework:**
+* `fastapi==0.104.1` - Modern Python web framework for building APIs with automatic documentation
+* `uvicorn[standard]==0.24.0` - Fast ASGI server for FastAPI with WebSocket support
+* `pydantic[email]==2.5.0` - Data validation using Python type annotations and email validation
+
+**Database & ORM:**
+* `sqlalchemy==2.0.23` - The Python SQL toolkit and Object-Relational Mapping library
+* `alembic==1.12.1` - Database migration tool for SQLAlchemy
+* `psycopg2-binary==2.9.9` - PostgreSQL database adapter for Python
+
+**Authentication & Security:**
+* `python-jose[cryptography]==3.3.0` - JSON Web Token implementation for Python
+* `bcrypt==4.0.1` - Modern password hashing for your software and servers
+* `passlib[bcrypt]==1.7.4` - Comprehensive password hashing library with bcrypt support
+
+**File Handling & HTTP:**
+* `aiofiles==23.2.1` - File operations with asyncio support for handling uploads
+* `httpx==0.25.2` - Modern HTTP client library for external API integration
+* `python-multipart==0.0.6` - Multipart form data parsing for file uploads
+
+**Testing:**
+* `pytest==7.4.3` - Mature full-featured Python testing tool
+* `pytest-asyncio==0.21.1` - Pytest support for asyncio-based tests
+* `websockets==12.0` - WebSocket client and server library for real-time testing
+* `psutil==5.9.6` - System and process monitoring utilities for performance tests
+* `pytest-benchmark==4.0.0` - Performance benchmarking plugin for pytest
+
+### Frontend Dependencies (Node.js/React)
+
+**Core Framework:**
+* `react==19.2.0` - A JavaScript library for building user interfaces
+* `react-dom==19.2.0` - React package for working with the DOM
+* `react-scripts==5.0.1` - Configuration and scripts for Create React App
+
+**Routing & Navigation:**
+* `react-router-dom==7.9.3` - Declarative routing for React applications
+
+**HTTP Client:**
+* `axios==1.12.2` - Promise-based HTTP client for the browser and Node.js
+
+**UI Components & Styling:**
+* `@headlessui/react==2.2.9` - Completely unstyled, accessible UI components for React
+* `@heroicons/react==2.2.0` - Beautiful hand-crafted SVG icons for React
+* `@tailwindcss/forms==0.5.10` - Form styling plugin for Tailwind CSS
+* `tailwindcss==3.4.18` - Utility-first CSS framework for rapid UI development
+* `framer-motion==12.23.22` - Production-ready motion library for React animations
+
+**User Experience:**
+* `react-hot-toast==2.6.0` - Smoking hot Notifications for React
+
+**Testing & Development:**
+* `@testing-library/react==16.3.0` - Simple and complete React DOM testing utilities
+* `@testing-library/jest-dom==6.9.1` - Custom Jest matchers for testing DOM elements
+* `@testing-library/user-event==14.6.1` - Fire events the same way the user does
+* `cypress==13.17.0` - End-to-end testing framework for modern web applications
+* `cypress-file-upload==5.0.8` - File upload testing utilities for Cypress
+
+**Build Tools:**
+* `autoprefixer==10.4.21` - PostCSS plugin to parse CSS and add vendor prefixes
+* `postcss==8.5.6` - Tool for transforming CSS with JavaScript
+
+**Monitoring:**
+* `web-vitals==2.1.4` - Essential metrics for a healthy website
+
+---
+
 ## Initial Prompt
 ```
 You are an AI software engineer assistant. Your job is to build a production-ready fullstack Task Manager app with the following requirements:
