@@ -42,7 +42,7 @@ jobs:
         python -m pytest tests/ -v --junitxml=tests/output/test-results.xml
         
     - name: Upload backend test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: backend-test-results
@@ -85,14 +85,14 @@ jobs:
         npm run build
         
     - name: Upload production build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: frontend-build
         path: frontend/build/
         retention-days: 30
         
     - name: Upload Cypress videos
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: cypress-videos
@@ -133,7 +133,7 @@ jobs:
         npm audit --audit-level=high || echo "NPM audit completed with warnings"
         
     - name: Upload security scan results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-scan-results
