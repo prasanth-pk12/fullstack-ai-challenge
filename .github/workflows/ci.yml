@@ -1,0 +1,308 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/app/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+        
+    - name: Set up backend environment
+      working-directory: ./backend
+      run: |
+        echo "Setting up test database..."
+        echo "ENVIRONMENT=test" > .env
+        
+    - name: Run backend unit tests
+      working-directory: ./backend
+      run: |
+        echo "Running unit tests..."
+        python -m pytest tests/ -v --tb=short --durations=10 \
+          -k "not (integration or performance or websocket)" \
+          --junitxml=test-results-unit.xml
+          
+    - name: Run backend integration tests
+      working-directory: ./backend
+      run: |
+        echo "Running integration tests..."
+        python -m pytest tests/ -v --tb=short --durations=10 \
+          -k "integration" \
+          --junitxml=test-results-integration.xml
+          
+    - name: Run backend performance tests
+      working-directory: ./backend
+      run: |
+        echo "Running performance tests..."
+        python -m pytest tests/ -v --tb=short --durations=10 \
+          -k "performance or benchmark" \
+          --junitxml=test-results-performance.xml
+          
+    - name: Run backend WebSocket tests
+      working-directory: ./backend
+      run: |
+        echo "Running WebSocket tests..."
+        python -m pytest tests/ -v --tb=short --durations=10 \
+          -k "websocket" \
+          --junitxml=test-results-websocket.xml
+          
+    - name: Upload backend test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: backend-test-results-${{ matrix.python-version }}
+        path: backend/test-results-*.xml
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18, 20]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm ci --prefer-offline --no-audit
+        
+    - name: Run frontend unit tests
+      working-directory: ./frontend
+      run: |
+        echo "Running React unit tests..."
+        npm test -- --coverage --watchAll=false --testResultsProcessor=jest-junit
+      env:
+        CI: true
+        
+    - name: Upload frontend test coverage
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: frontend-coverage-${{ matrix.node-version }}
+        path: frontend/coverage/
+
+  frontend-e2e-tests:
+    name: Frontend E2E Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Set up Python for backend
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/app/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+        
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm ci --prefer-offline --no-audit
+        
+    - name: Start backend server
+      working-directory: ./backend
+      run: |
+        echo "Starting backend server for E2E tests..."
+        python app/main.py &
+        sleep 10
+        echo "Backend server started"
+        
+    - name: Start frontend server
+      working-directory: ./frontend
+      run: |
+        echo "Starting frontend server for E2E tests..."
+        npm start &
+        sleep 30
+        echo "Frontend server started"
+        
+    - name: Wait for servers to be ready
+      run: |
+        echo "Waiting for backend to be ready..."
+        timeout 60 bash -c 'until curl -f http://localhost:8000/docs; do sleep 2; done'
+        echo "Waiting for frontend to be ready..."
+        timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+        
+    - name: Run Cypress E2E tests
+      working-directory: ./frontend
+      run: |
+        echo "Running Cypress E2E tests..."
+        npm run cypress:run
+      env:
+        CYPRESS_baseUrl: http://localhost:3000
+        CYPRESS_apiUrl: http://localhost:8000
+        
+    - name: Upload Cypress screenshots on failure
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: cypress-screenshots
+        path: frontend/cypress/screenshots/
+        
+    - name: Upload Cypress videos
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: cypress-videos
+        path: frontend/cypress/videos/
+
+  frontend-build:
+    name: Frontend Production Build
+    runs-on: ubuntu-latest
+    needs: [frontend-tests]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm ci --prefer-offline --no-audit
+        
+    - name: Build frontend for production
+      working-directory: ./frontend
+      run: |
+        echo "Building frontend for production..."
+        npm run build
+        
+    - name: Upload production build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: frontend-build
+        path: frontend/build/
+        retention-days: 30
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run backend security scan
+      working-directory: ./backend
+      run: |
+        python -m pip install safety bandit
+        echo "Running safety check for Python dependencies..."
+        safety check -r app/requirements.txt
+        echo "Running bandit security linting..."
+        bandit -r app/ -f json -o bandit-report.json || true
+        
+    - name: Set up Node.js for frontend security scan
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        
+    - name: Run frontend security audit
+      working-directory: ./frontend
+      run: |
+        echo "Running npm audit..."
+        npm audit --audit-level=high
+        
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-scan-results
+        path: |
+          backend/bandit-report.json
+          
+  deploy-check:
+    name: Deployment Check
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests, frontend-e2e-tests, frontend-build, security-scan]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: frontend-build
+        path: ./frontend-build/
+        
+    - name: Verify build artifacts
+      run: |
+        echo "Verifying build artifacts..."
+        ls -la frontend-build/
+        echo "Build verification complete - ready for deployment"
+        
+    - name: Deployment readiness check
+      run: |
+        echo "✅ All tests passed"
+        echo "✅ Security scans completed"
+        echo "✅ Frontend build successful"
+        echo "✅ Ready for deployment to production"

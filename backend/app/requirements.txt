@@ -3,6 +3,7 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 aiofiles==23.2.1
 httpx==0.25.2
+pydantic[email]==2.5.0
 
 # Database dependencies
 sqlalchemy==2.0.23
@@ -10,7 +11,7 @@ alembic==1.12.1
 
 # Authentication and security
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 
 # Testing dependencies
 pytest==7.4.3

@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query
 from fastapi.security import HTTPBearer
 from typing import Optional
-import jwt
+from jose import jwt, JWTError
 from datetime import datetime
 
 from services.websocket_service import connection_manager, handle_websocket_error
@@ -63,7 +63,7 @@ async def authenticate_websocket_user(token: str, db: Session) -> tuple[int, str
         # Decode JWT token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
-        user_id: int = payload.get("user_id")
+        user_id = payload.get("user_id")
         role = payload.get("role")
         
         if username is None or user_id is None or role is None:
@@ -83,10 +83,8 @@ async def authenticate_websocket_user(token: str, db: Session) -> tuple[int, str
         # Return the user_id and role from the token (already validated)
         return user_id, role
         
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
 @router.websocket("/tasks")

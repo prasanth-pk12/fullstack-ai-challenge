@@ -2,16 +2,14 @@ import pytest
 import asyncio
 import os
 import tempfile
+import sys
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Import your app and database setup
-import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app'))
-
+# Direct imports (PYTHONPATH should be set to app directory)
 from main import app
 from database.connection import get_db, Base
 from models.auth_models import User, UserRole
