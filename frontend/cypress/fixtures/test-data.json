@@ -1,0 +1,65 @@
+{
+  "testTasks": [
+    {
+      "title": "Test Task 1",
+      "description": "This is a test task for E2E testing",
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "title": "Test Task 2",
+      "description": "Another test task with medium priority",
+      "priority": "medium",
+      "status": "in-progress"
+    },
+    {
+      "title": "Test Task 3",
+      "description": "A completed test task",
+      "priority": "low",
+      "status": "done"
+    }
+  ],
+  "testUsers": {
+    "regularUser": {
+      "username": "testuser",
+      "email": "test@example.com",
+      "password": "testpass123",
+      "role": "user"
+    },
+    "adminUser": {
+      "username": "admin",
+      "email": "admin@example.com",
+      "password": "admin123",
+      "role": "admin"
+    }
+  },
+  "testAttachments": {
+    "document": {
+      "filename": "test-document.pdf",
+      "size": "1.2 MB",
+      "type": "application/pdf"
+    },
+    "image": {
+      "filename": "test-image.png",
+      "size": "500 KB",
+      "type": "image/png"
+    }
+  },
+  "apiResponses": {
+    "quote": {
+      "text": "The only way to do great work is to love what you do.",
+      "author": "Steve Jobs",
+      "category": "inspirational"
+    },
+    "loginSuccess": {
+      "access_token": "fake-jwt-token",
+      "token_type": "bearer",
+      "user": {
+        "id": 1,
+        "username": "testuser",
+        "email": "test@example.com",
+        "role": "user"
+      }
+    }
+  }
+}

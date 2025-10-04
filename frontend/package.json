@@ -21,7 +21,16 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "cypress:run:chrome": "cypress run --browser chrome",
+    "cypress:run:firefox": "cypress run --browser firefox",
+    "cypress:run:edge": "cypress run --browser edge",
+    "test:e2e": "cypress run",
+    "test:e2e:headed": "cypress run --headed",
+    "test:e2e:dev": "cypress open --e2e",
+    "test:e2e:component": "cypress open --component"
   },
   "eslintConfig": {
     "extends": [
@@ -41,11 +50,31 @@
       "last 1 safari version"
     ]
   },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx}",
+      "!src/index.js",
+      "!src/reportWebVitals.js",
+      "!src/setupTests.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 70,
+        "functions": 70,
+        "lines": 70,
+        "statements": 70
+      }
+    }
+  },
   "devDependencies": {
+    "@cypress/webpack-preprocessor": "^7.0.1",
     "@tailwindcss/postcss": "^4.1.14",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/user-event": "^14.6.1",
     "autoprefixer": "^10.4.21",
+    "cypress": "^13.17.0",
+    "cypress-file-upload": "^5.0.8",
+    "jest-junit": "^16.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.18"
   }

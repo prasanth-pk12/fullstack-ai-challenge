@@ -1,0 +1,39 @@
+[
+  {
+    "id": 1,
+    "title": "Sample Task 1",
+    "description": "This is a sample task for testing",
+    "status": "TODO",
+    "priority": "medium",
+    "created_at": "2024-01-15T10:00:00Z",
+    "updated_at": "2024-01-15T10:00:00Z",
+    "created_by": {
+      "id": 1,
+      "username": "testuser",
+      "email": "test@example.com"
+    },
+    "attachments": []
+  },
+  {
+    "id": 2,
+    "title": "Sample Task 2",
+    "description": "Another sample task",
+    "status": "IN_PROGRESS",
+    "priority": "high",
+    "created_at": "2024-01-15T11:00:00Z",
+    "updated_at": "2024-01-15T11:30:00Z",
+    "created_by": {
+      "id": 1,
+      "username": "testuser",
+      "email": "test@example.com"
+    },
+    "attachments": [
+      {
+        "id": 1,
+        "filename": "document.pdf",
+        "file_size": 1024000,
+        "uploaded_at": "2024-01-15T11:15:00Z"
+      }
+    ]
+  }
+]

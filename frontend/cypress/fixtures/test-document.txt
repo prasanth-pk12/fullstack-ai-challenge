@@ -1,0 +1,2 @@
+This is a test document file for Cypress E2E testing.
+It contains sample content to test file upload functionality.
