@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from database.connection import create_tables
 from routers import auth_router, task_router, external_router, websocket_router
 from services.auth_service import get_current_user, role_required
@@ -14,6 +15,15 @@ app = FastAPI(
     title="FastAPI Authentication, Task & External API with WebSockets",
     description="A FastAPI application with JWT authentication, task management, file uploads, external data fetching, and real-time WebSocket updates",
     version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],  # React development server origins
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 # Create uploads directory
