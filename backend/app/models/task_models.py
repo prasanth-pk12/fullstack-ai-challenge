@@ -28,6 +28,9 @@ class Task(Base):
 
     # Relationship to User model
     owner = relationship("User", back_populates="tasks")
+    
+    # Relationship to Attachment model
+    file_attachments = relationship("Attachment", back_populates="task", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Task(id={self.id}, title='{self.title}', status='{self.status.value}', owner_id={self.owner_id})>"

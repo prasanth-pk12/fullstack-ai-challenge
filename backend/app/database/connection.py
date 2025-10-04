@@ -37,5 +37,6 @@ def create_tables():
     # Import models to register them with SQLAlchemy
     from models.auth_models import User  # noqa: F401
     from models.task_models import Task  # noqa: F401
+    from models.attachment_models import Attachment  # noqa: F401
     
     Base.metadata.create_all(bind=engine)

@@ -22,6 +22,9 @@ class User(Base):
 
     # Relationship to Task model
     tasks = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
+    
+    # Relationship to Attachment model
+    uploaded_files = relationship("Attachment", back_populates="uploader")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}', role='{self.role.value}')>"

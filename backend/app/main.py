@@ -1,16 +1,25 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.staticfiles import StaticFiles
 from database.connection import create_tables
 from routers import auth_router, task_router
 from services.auth_service import get_current_user, role_required
 from models.auth_models import UserRole, User
 from schemas.auth_schemas import User as UserSchema
+import os
 
 # Create FastAPI app
 app = FastAPI(
-    title="FastAPI Authentication API",
-    description="A FastAPI application with JWT-based authentication and role management",
+    title="FastAPI Authentication & Task API",
+    description="A FastAPI application with JWT-based authentication, task management, and file uploads",
     version="1.0.0"
 )
+
+# Create uploads directory
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Mount static files for uploaded attachments
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Create database tables on startup
 @app.on_event("startup")
