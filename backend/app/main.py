@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from database.connection import create_tables
-from routers import auth_router
+from routers import auth_router, task_router
 from services.auth_service import get_current_user, role_required
 from models.auth_models import UserRole, User
 from schemas.auth_schemas import User as UserSchema
@@ -19,6 +19,7 @@ async def startup():
 
 # Include routers
 app.include_router(auth_router.router)
+app.include_router(task_router.router)
 
 # Protected route examples
 @app.get("/", tags=["root"])

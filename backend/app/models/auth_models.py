@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Enum as SQLAlchemyEnum
+from sqlalchemy.orm import relationship
 from database.connection import Base
 import enum
 
@@ -18,6 +19,9 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(128), nullable=False)
     role = Column(SQLAlchemyEnum(UserRole), default=UserRole.USER, nullable=False)
+
+    # Relationship to Task model
+    tasks = relationship("Task", back_populates="owner", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}', role='{self.role.value}')>"
