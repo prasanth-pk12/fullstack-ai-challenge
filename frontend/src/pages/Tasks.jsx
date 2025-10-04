@@ -121,7 +121,7 @@ const Tasks = () => {
   }, [user]);
 
   // Set up WebSocket event handlers
-  const { isConnected } = useTaskEvents({
+  useTaskEvents({
     onTaskCreated: handleTaskCreated,
     onTaskUpdated: handleTaskUpdated,
     onTaskDeleted: handleTaskDeleted
@@ -217,13 +217,20 @@ const Tasks = () => {
           });
           console.error('Attachment upload error:', uploadError);
         }
+      } else {
+        toast.success('Task created successfully!');
       }
       
-      // Don't reload tasks here - WebSocket will handle the update
-      // Only add to local state if WebSocket is not connected
-      if (!isConnected) {
-        setTasks(prevTasks => [newTask, ...prevTasks]);
-      }
+      // Always add to local state immediately for instant UI feedback
+      // WebSocket will sync any updates/conflicts from other users
+      setTasks(prevTasks => {
+        // Avoid duplicates - check if task already exists
+        if (prevTasks.find(t => t.id === newTask.id)) {
+          return prevTasks;
+        }
+        return [newTask, ...prevTasks];
+      });
+      
       await loadStats();
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to create task');
@@ -245,13 +252,13 @@ const Tasks = () => {
         await tasksAPI.uploadFile(editingTask.id, newAttachmentFile);
       }
 
-      // Don't reload tasks here - WebSocket will handle the update
-      // Only update local state if WebSocket is not connected
-      if (!isConnected) {
-        setTasks(prevTasks => prevTasks.map(task =>
-          task.id === editingTask.id ? { ...task, ...updatedTask } : task
-        ));
-      }
+      // Always update local state immediately for instant UI feedback
+      // WebSocket will sync any updates/conflicts from other users
+      setTasks(prevTasks => prevTasks.map(task =>
+        task.id === editingTask.id ? { ...task, ...updatedTask } : task
+      ));
+      
+      toast.success('Task updated successfully!');
       setEditingTask(null);
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to update task');
@@ -265,12 +272,10 @@ const Tasks = () => {
 
     try {
       await tasksAPI.deleteTask(taskId);
-      // Don't reload tasks here - WebSocket will handle the update
-      // Only update local state if WebSocket is not connected
-      if (!isConnected) {
-        setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
-        toast.success('Task deleted successfully');
-      }
+      // Always update local state immediately for instant UI feedback
+      // WebSocket will sync any updates/conflicts from other users
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+      toast.success('Task deleted successfully');
       await loadStats();
     } catch (error) {
       toast.error('Failed to delete task');
@@ -281,14 +286,12 @@ const Tasks = () => {
   const handleStatusChange = async (taskId, newStatus) => {
     try {
       const updatedTask = await tasksAPI.updateTask(taskId, { status: newStatus });
-      // Don't reload tasks here - WebSocket will handle the update
-      // Only update local state if WebSocket is not connected
-      if (!isConnected) {
-        setTasks(prevTasks => prevTasks.map(task =>
-          task.id === taskId ? { ...task, ...updatedTask } : task
-        ));
-        toast.success('Task status updated');
-      }
+      // Always update local state immediately for instant UI feedback
+      // WebSocket will sync any updates/conflicts from other users
+      setTasks(prevTasks => prevTasks.map(task =>
+        task.id === taskId ? { ...task, ...updatedTask } : task
+      ));
+      toast.success('Task status updated');
     } catch (error) {
       toast.error('Failed to update task status');
       console.error('Error updating status:', error);
