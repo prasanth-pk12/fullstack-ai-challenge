@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   CalendarIcon, 
@@ -58,23 +58,18 @@ const TaskCard = ({
   onStatusChange, 
   onViewAttachments,
   className = '',
-  animateUpdate = false // Add prop to trigger update animation
+  animateUpdate = false, // Add prop to trigger update animation
+  isDeleting = false, // Loading state for delete operation
+  isUpdatingStatus = false // Loading state for status updates
 }) => {
   const { user } = useAuth();
-  const [isUpdating, setIsUpdating] = useState(false);
   
   const canDelete = user?.role === 'admin' || task.owner_id === user?.id;
   const canEdit = user?.role === 'admin' || task.owner_id === user?.id;
   
   const handleStatusChange = async (newStatus) => {
-    if (!canEdit) return;
-    
-    setIsUpdating(true);
-    try {
-      await onStatusChange(task.id, newStatus);
-    } finally {
-      setIsUpdating(false);
-    }
+    if (!canEdit || isUpdatingStatus) return;
+    await onStatusChange(task.id, newStatus);
   };
 
   const getStatusBadge = () => {
@@ -208,10 +203,15 @@ const TaskCard = ({
               {canDelete && (
                 <button
                   onClick={() => onDelete(task.id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                  disabled={isDeleting}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Delete task"
                 >
-                  <TrashIcon className="w-4 h-4" />
+                  {isDeleting ? (
+                    <div className="w-4 h-4 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <TrashIcon className="w-4 h-4" />
+                  )}
                 </button>
               )}
             </div>
@@ -228,17 +228,24 @@ const TaskCard = ({
               <button
                 key={status}
                 onClick={() => handleStatusChange(status)}
-                disabled={isUpdating || task.status === status}
+                disabled={isUpdatingStatus || task.status === status}
                 className={`
                   px-2 py-1 text-xs rounded-md transition-all duration-200
                   ${task.status === status 
                     ? 'bg-blue-100 text-blue-800 cursor-default' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }
-                  ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''}
+                  ${isUpdatingStatus ? 'opacity-50 cursor-not-allowed' : ''}
                 `}
               >
-                {status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                {isUpdatingStatus ? (
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    <span>...</span>
+                  </div>
+                ) : (
+                  status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                )}
               </button>
             ))}
           </div>

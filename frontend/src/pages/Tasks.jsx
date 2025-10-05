@@ -25,6 +25,9 @@ const Tasks = () => {
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [deletingTaskIds, setDeletingTaskIds] = useState(new Set());
+  const [updatingStatusIds, setUpdatingStatusIds] = useState(new Set());
   
   // Modal states
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -200,6 +203,7 @@ const Tasks = () => {
   };
 
   const handleCreateTask = async (taskData, newAttachmentFile = null) => {
+    setIsFormLoading(true);
     try {
       const newTask = await tasksAPI.createTask(taskData);
       
@@ -234,10 +238,13 @@ const Tasks = () => {
       await loadStats();
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to create task');
+    } finally {
+      setIsFormLoading(false);
     }
   };
 
   const handleEditTask = async (taskData, newAttachmentFile = null, removeExistingAttachment = false) => {
+    setIsFormLoading(true);
     try {
       // Remove existing attachment if requested
       if (removeExistingAttachment && editingTask.attachment) {
@@ -262,6 +269,8 @@ const Tasks = () => {
       setEditingTask(null);
     } catch (error) {
       throw new Error(error.response?.data?.detail || 'Failed to update task');
+    } finally {
+      setIsFormLoading(false);
     }
   };
 
@@ -270,6 +279,7 @@ const Tasks = () => {
       return;
     }
 
+    setDeletingTaskIds(prev => new Set([...prev, taskId]));
     try {
       await tasksAPI.deleteTask(taskId);
       // Always update local state immediately for instant UI feedback
@@ -280,10 +290,17 @@ const Tasks = () => {
     } catch (error) {
       toast.error('Failed to delete task');
       console.error('Error deleting task:', error);
+    } finally {
+      setDeletingTaskIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
     }
   };
 
   const handleStatusChange = async (taskId, newStatus) => {
+    setUpdatingStatusIds(prev => new Set([...prev, taskId]));
     try {
       const updatedTask = await tasksAPI.updateTask(taskId, { status: newStatus });
       // Always update local state immediately for instant UI feedback
@@ -295,6 +312,12 @@ const Tasks = () => {
     } catch (error) {
       toast.error('Failed to update task status');
       console.error('Error updating status:', error);
+    } finally {
+      setUpdatingStatusIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
     }
   };
 
@@ -553,6 +576,8 @@ const Tasks = () => {
                   onStatusChange={handleStatusChange}
                   onViewAttachments={handleOpenAttachments}
                   animateUpdate={recentlyUpdatedTasks.has(task.id)}
+                  isDeleting={deletingTaskIds.has(task.id)}
+                  isUpdatingStatus={updatingStatusIds.has(task.id)}
                 />
               ))}
             </AnimatePresence>
@@ -569,6 +594,7 @@ const Tasks = () => {
         }}
         onSubmit={editingTask ? handleEditTask : handleCreateTask}
         task={editingTask}
+        isLoading={isFormLoading}
       />
 
       {/* Attachments Modal */}
